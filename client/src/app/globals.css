@@ -1,0 +1,142 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-ss-deep: var(--ss-bg-deep);
+  --color-ss-navy: var(--ss-bg-navy);
+  --color-ss-glow: var(--ss-bg-glow);
+  --color-ss-mid: var(--ss-bg-mid);
+  --color-ss-text: var(--ss-text);
+  --color-ss-muted: var(--ss-text-muted);
+  --color-ss-accent: var(--ss-accent);
+  --color-ss-accent-hover: var(--ss-accent-hover);
+  --color-ss-tile-from: var(--ss-tile-from);
+  --color-ss-tile-to: var(--ss-tile-to);
+  --color-ss-tile-when: var(--ss-tile-when);
+  --color-ss-tile-details: var(--ss-tile-details);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* SeeSight brand tokens — docs/DESIGN.md */
+  --ss-bg-deep: #020814;
+  --ss-bg-navy: #071428;
+  --ss-bg-glow: #0a4a7a;
+  --ss-bg-mid: #0e6e9c;
+  --ss-map-line: rgba(255, 255, 255, 0.12);
+  --ss-text: #ffffff;
+  --ss-text-muted: rgba(220, 235, 255, 0.72);
+  --ss-text-on-light: #0a0a0a;
+  --ss-surface: rgba(8, 24, 48, 0.72);
+  --ss-surface-strong: #050d1a;
+  --ss-border: rgba(255, 255, 255, 0.55);
+  --ss-overlay: rgba(0, 0, 0, 0.55);
+  --ss-accent: #3b2cff;
+  --ss-accent-hover: #5246ff;
+  --ss-tile-from: #2ec4c6;
+  --ss-tile-to: #7ec8f0;
+  --ss-tile-when: #a66b3d;
+  --ss-tile-details: #b8e046;
+  --ss-footer: #000000;
+
+  --background: var(--ss-bg-deep);
+  --foreground: var(--ss-text);
+  --card: var(--ss-surface-strong);
+  --card-foreground: var(--ss-text);
+  --popover: var(--ss-surface-strong);
+  --popover-foreground: var(--ss-text);
+  --primary: var(--ss-accent);
+  --primary-foreground: #ffffff;
+  --secondary: var(--ss-bg-navy);
+  --secondary-foreground: var(--ss-text);
+  --muted: var(--ss-bg-navy);
+  --muted-foreground: var(--ss-text-muted);
+  --accent: var(--ss-accent);
+  --accent-foreground: #ffffff;
+  --destructive: oklch(0.65 0.2 25);
+  --border: var(--ss-border);
+  --input: rgba(255, 255, 255, 0.15);
+  --ring: var(--ss-accent);
+  --chart-1: var(--ss-tile-from);
+  --chart-2: var(--ss-tile-to);
+  --chart-3: var(--ss-accent);
+  --chart-4: var(--ss-tile-when);
+  --chart-5: var(--ss-tile-details);
+  --radius: 1rem;
+  --sidebar: var(--ss-bg-navy);
+  --sidebar-foreground: var(--ss-text);
+  --sidebar-primary: var(--ss-accent);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--ss-bg-glow);
+  --sidebar-accent-foreground: var(--ss-text);
+  --sidebar-border: rgba(255, 255, 255, 0.12);
+  --sidebar-ring: var(--ss-accent);
+}
+
+.dark {
+  --background: var(--ss-bg-deep);
+  --foreground: var(--ss-text);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply font-sans;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% 0%, var(--ss-bg-glow) 0%, transparent 55%),
+      radial-gradient(ellipse 70% 45% at 50% 55%, var(--ss-bg-mid) 0%, transparent 60%),
+      linear-gradient(180deg, var(--ss-bg-deep) 0%, var(--ss-bg-navy) 45%, var(--ss-bg-deep) 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+}

@@ -1,0 +1,19 @@
+---
+pid: 11937
+cwd: "/Users/gigi/Desktop/SeeSight"
+command: "cd /Users/gigi/Desktop/SeeSight/client && npm run dev"
+started_at: 2026-07-15T13:54:01.441Z
+running_for_ms: 45018    
+---
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> client@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.10 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.100.167:3000
+- Environments: .env.local
+✓ Ready in 296ms
+
+ GET / 200 in 1882ms (next.js: 1818ms, application-code: 64ms)

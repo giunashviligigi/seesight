@@ -1,0 +1,54 @@
+# SeeSight Business — local development stack
+# Usage: docker compose -f docker/docker-compose.yml up --build
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: seesight-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: seesight
+      POSTGRES_PASSWORD: seesight
+      POSTGRES_DB: seesight
+    ports:
+      - "5432:5432"
+    volumes:
+      - seesight_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seesight -d seesight"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ../server
+      dockerfile: ../docker/Dockerfile.api
+    container_name: seesight-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgresql://seesight:seesight@postgres:5432/seesight?schema=public
+      CORS_ORIGIN: http://localhost:3000
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ../client
+      dockerfile: ../docker/Dockerfile.web
+    container_name: seesight-web
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  seesight_pg_data:

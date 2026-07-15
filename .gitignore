@@ -7,5 +7,12 @@ dist/
 .next/
 coverage/
 *.log
+!tests/**/*.log
+server/generated/
+*.tsbuildinfo
 
 seesight/
+
+.cursor/
+client/CLAUDE.md
+client/AGENTS.md

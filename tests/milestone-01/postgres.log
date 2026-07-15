@@ -1,0 +1,303 @@
+ Image postgres:16-alpine Pulling 
+ 5de55e5ef9c0 Pulling fs layer 0B
+ ad9358bd2775 Pulling fs layer 0B
+ 89c58893ee14 Pulling fs layer 0B
+ 9c67bf156aea Pulling fs layer 0B
+ 558630996ec6 Pulling fs layer 0B
+ 9bd6fe11d3ee Pulling fs layer 0B
+ 55c67dc8322f Pulling fs layer 0B
+ de4dbb13f4cc Pulling fs layer 0B
+ 09758c49a5ce Pulling fs layer 0B
+ 283a3992cb1d Pulling fs layer 0B
+ d0e07beacc20 Pulling fs layer 0B
+ 89c58893ee14 Downloading 173B
+ 89c58893ee14 Download complete 0B
+ 558630996ec6 Download complete 0B
+ 9c67bf156aea Download complete 0B
+ 09758c49a5ce Download complete 0B
+ de4dbb13f4cc Download complete 0B
+ 283a3992cb1d Download complete 0B
+ ad9358bd2775 Download complete 0B
+ 55c67dc8322f Download complete 0B
+ 5de55e5ef9c0 Downloading 618.5kB
+ 5de55e5ef9c0 Downloading 1.049MB
+ 5de55e5ef9c0 Downloading 1.049MB
+ 5de55e5ef9c0 Downloading 2.097MB
+ 5de55e5ef9c0 Downloading 2.097MB
+ 5de55e5ef9c0 Downloading 2.097MB
+ 5de55e5ef9c0 Downloading 2.097MB
+ 5de55e5ef9c0 Downloading 3.146MB
+ 5de55e5ef9c0 Downloading 3.146MB
+ 5de55e5ef9c0 Downloading 3.146MB
+ d0e07beacc20 Download complete 0B
+ 5de55e5ef9c0 Downloading 3.146MB
+ 5de55e5ef9c0 Download complete 0B
+ de4dbb13f4cc Pull complete 0B
+ 5de55e5ef9c0 Pull complete 0B
+ 9bd6fe11d3ee Downloading 1.049MB
+ 81ab95c55145 Download complete 0B
+ 89c58893ee14 Pull complete 0B
+ 9c67bf156aea Pull complete 0B
+ d0e07beacc20 Pull complete 0B
+ 9bd6fe11d3ee Downloading 1.049MB
+ 9bd6fe11d3ee Downloading 1.049MB
+ 9bd6fe11d3ee Downloading 1.049MB
+ bf871ecb6fc1 Download complete 0B
+ 9bd6fe11d3ee Downloading 1.049MB
+ 9bd6fe11d3ee Downloading 1.049MB
+ 9bd6fe11d3ee Downloading 1.049MB
+ 9bd6fe11d3ee Downloading 1.049MB
+ 9bd6fe11d3ee Downloading 1.049MB
+ 9bd6fe11d3ee Downloading 2.097MB
+ 9bd6fe11d3ee Downloading 2.097MB
+ 9bd6fe11d3ee Downloading 2.097MB
+ 9bd6fe11d3ee Downloading 2.097MB
+ 9bd6fe11d3ee Downloading 2.097MB
+ 9bd6fe11d3ee Downloading 2.097MB
+ 9bd6fe11d3ee Downloading 2.097MB
+ 9bd6fe11d3ee Downloading 3.146MB
+ 9bd6fe11d3ee Downloading 3.146MB
+ 9bd6fe11d3ee Downloading 3.146MB
+ 9bd6fe11d3ee Downloading 3.146MB
+ 9bd6fe11d3ee Downloading 3.146MB
+ 9bd6fe11d3ee Downloading 3.146MB
+ 9bd6fe11d3ee Downloading 3.146MB
+ 9bd6fe11d3ee Downloading 3.146MB
+ 9bd6fe11d3ee Downloading 4.194MB
+ 9bd6fe11d3ee Downloading 4.194MB
+ 9bd6fe11d3ee Downloading 4.194MB
+ 9bd6fe11d3ee Downloading 4.194MB
+ 9bd6fe11d3ee Downloading 4.194MB
+ 9bd6fe11d3ee Downloading 4.194MB
+ 9bd6fe11d3ee Downloading 4.194MB
+ 9bd6fe11d3ee Downloading 5.243MB
+ 9bd6fe11d3ee Downloading 5.243MB
+ 9bd6fe11d3ee Downloading 5.243MB
+ 9bd6fe11d3ee Downloading 5.243MB
+ 9bd6fe11d3ee Downloading 5.243MB
+ 9bd6fe11d3ee Downloading 5.243MB
+ 9bd6fe11d3ee Downloading 5.243MB
+ 9bd6fe11d3ee Downloading 6.291MB
+ 9bd6fe11d3ee Downloading 6.291MB
+ 9bd6fe11d3ee Downloading 6.291MB
+ 9bd6fe11d3ee Downloading 6.291MB
+ 9bd6fe11d3ee Downloading 6.291MB
+ 9bd6fe11d3ee Downloading 7.34MB
+ 9bd6fe11d3ee Downloading 7.34MB
+ 9bd6fe11d3ee Downloading 7.34MB
+ 9bd6fe11d3ee Downloading 7.34MB
+ 9bd6fe11d3ee Downloading 7.34MB
+ 9bd6fe11d3ee Downloading 7.34MB
+ 9bd6fe11d3ee Downloading 8.389MB
+ 9bd6fe11d3ee Downloading 8.389MB
+ 9bd6fe11d3ee Downloading 8.389MB
+ 9bd6fe11d3ee Downloading 8.389MB
+ 9bd6fe11d3ee Downloading 9.437MB
+ 9bd6fe11d3ee Downloading 9.437MB
+ 9bd6fe11d3ee Downloading 9.437MB
+ 9bd6fe11d3ee Downloading 9.437MB
+ 9bd6fe11d3ee Downloading 10.49MB
+ 9bd6fe11d3ee Downloading 10.49MB
+ 9bd6fe11d3ee Downloading 10.49MB
+ 9bd6fe11d3ee Downloading 10.49MB
+ 9bd6fe11d3ee Downloading 11.53MB
+ 9bd6fe11d3ee Downloading 11.53MB
+ 9bd6fe11d3ee Downloading 11.53MB
+ 9bd6fe11d3ee Downloading 11.53MB
+ 9bd6fe11d3ee Downloading 12.58MB
+ 9bd6fe11d3ee Downloading 12.58MB
+ 9bd6fe11d3ee Downloading 13.63MB
+ 9bd6fe11d3ee Downloading 13.63MB
+ 9bd6fe11d3ee Downloading 13.63MB
+ 9bd6fe11d3ee Downloading 13.63MB
+ 9bd6fe11d3ee Downloading 14.68MB
+ 9bd6fe11d3ee Downloading 14.68MB
+ 9bd6fe11d3ee Downloading 15.73MB
+ 9bd6fe11d3ee Downloading 15.73MB
+ 9bd6fe11d3ee Downloading 16.78MB
+ 9bd6fe11d3ee Downloading 16.78MB
+ 9bd6fe11d3ee Downloading 16.78MB
+ 9bd6fe11d3ee Downloading 17.83MB
+ 9bd6fe11d3ee Downloading 17.83MB
+ 9bd6fe11d3ee Downloading 18.87MB
+ 9bd6fe11d3ee Downloading 18.87MB
+ 9bd6fe11d3ee Downloading 18.87MB
+ 9bd6fe11d3ee Downloading 19.92MB
+ 9bd6fe11d3ee Downloading 19.92MB
+ 9bd6fe11d3ee Downloading 19.92MB
+ 9bd6fe11d3ee Downloading 20.97MB
+ 9bd6fe11d3ee Downloading 20.97MB
+ 9bd6fe11d3ee Downloading 20.97MB
+ 9bd6fe11d3ee Downloading 22.02MB
+ 9bd6fe11d3ee Downloading 22.02MB
+ 9bd6fe11d3ee Downloading 22.02MB
+ 9bd6fe11d3ee Downloading 23.07MB
+ 9bd6fe11d3ee Downloading 23.07MB
+ 9bd6fe11d3ee Downloading 24.12MB
+ 9bd6fe11d3ee Downloading 24.12MB
+ 9bd6fe11d3ee Downloading 24.12MB
+ 9bd6fe11d3ee Downloading 25.17MB
+ 9bd6fe11d3ee Downloading 25.17MB
+ 9bd6fe11d3ee Downloading 26.21MB
+ 9bd6fe11d3ee Downloading 26.21MB
+ 9bd6fe11d3ee Downloading 26.21MB
+ 9bd6fe11d3ee Downloading 27.26MB
+ 9bd6fe11d3ee Downloading 27.26MB
+ 9bd6fe11d3ee Downloading 28.31MB
+ 9bd6fe11d3ee Downloading 28.31MB
+ 9bd6fe11d3ee Downloading 28.31MB
+ 9bd6fe11d3ee Downloading 29.36MB
+ 9bd6fe11d3ee Downloading 29.36MB
+ 9bd6fe11d3ee Downloading 30.41MB
+ 9bd6fe11d3ee Downloading 30.41MB
+ 9bd6fe11d3ee Downloading 30.41MB
+ 9bd6fe11d3ee Downloading 31.46MB
+ 9bd6fe11d3ee Downloading 31.46MB
+ 9bd6fe11d3ee Downloading 31.46MB
+ 9bd6fe11d3ee Downloading 32.51MB
+ 9bd6fe11d3ee Downloading 32.51MB
+ 9bd6fe11d3ee Downloading 33.55MB
+ 9bd6fe11d3ee Downloading 33.55MB
+ 9bd6fe11d3ee Downloading 33.55MB
+ 9bd6fe11d3ee Downloading 33.55MB
+ 9bd6fe11d3ee Downloading 33.55MB
+ 9bd6fe11d3ee Downloading 34.6MB
+ 9bd6fe11d3ee Downloading 34.6MB
+ 9bd6fe11d3ee Downloading 35.65MB
+ 9bd6fe11d3ee Downloading 36.7MB
+ 9bd6fe11d3ee Downloading 36.7MB
+ 9bd6fe11d3ee Downloading 37.75MB
+ 9bd6fe11d3ee Downloading 37.75MB
+ 9bd6fe11d3ee Downloading 38.8MB
+ 9bd6fe11d3ee Downloading 38.8MB
+ 9bd6fe11d3ee Downloading 39.85MB
+ 9bd6fe11d3ee Downloading 40.89MB
+ 9bd6fe11d3ee Downloading 40.89MB
+ 9bd6fe11d3ee Downloading 40.89MB
+ 9bd6fe11d3ee Downloading 41.94MB
+ 9bd6fe11d3ee Downloading 41.94MB
+ 9bd6fe11d3ee Downloading 42.99MB
+ 9bd6fe11d3ee Downloading 42.99MB
+ 9bd6fe11d3ee Downloading 44.04MB
+ 9bd6fe11d3ee Downloading 45.09MB
+ 9bd6fe11d3ee Downloading 45.09MB
+ 9bd6fe11d3ee Downloading 45.09MB
+ 9bd6fe11d3ee Downloading 46.14MB
+ 9bd6fe11d3ee Downloading 47.19MB
+ 9bd6fe11d3ee Downloading 47.19MB
+ 9bd6fe11d3ee Downloading 48.23MB
+ 9bd6fe11d3ee Downloading 48.23MB
+ 9bd6fe11d3ee Downloading 49.28MB
+ 9bd6fe11d3ee Downloading 49.28MB
+ 9bd6fe11d3ee Downloading 50.33MB
+ 9bd6fe11d3ee Downloading 51.38MB
+ 9bd6fe11d3ee Downloading 51.38MB
+ 9bd6fe11d3ee Downloading 52.43MB
+ 9bd6fe11d3ee Downloading 52.43MB
+ 9bd6fe11d3ee Downloading 53.48MB
+ 9bd6fe11d3ee Downloading 54.53MB
+ 9bd6fe11d3ee Downloading 54.53MB
+ 9bd6fe11d3ee Downloading 55.57MB
+ 9bd6fe11d3ee Downloading 55.57MB
+ 9bd6fe11d3ee Downloading 56.62MB
+ 9bd6fe11d3ee Downloading 56.62MB
+ 9bd6fe11d3ee Downloading 57.67MB
+ 9bd6fe11d3ee Downloading 57.67MB
+ 9bd6fe11d3ee Downloading 58.72MB
+ 9bd6fe11d3ee Downloading 59.77MB
+ 9bd6fe11d3ee Downloading 59.77MB
+ 9bd6fe11d3ee Downloading 60.82MB
+ 9bd6fe11d3ee Downloading 60.82MB
+ 9bd6fe11d3ee Downloading 61.87MB
+ 9bd6fe11d3ee Downloading 61.87MB
+ 9bd6fe11d3ee Downloading 62.91MB
+ 9bd6fe11d3ee Downloading 62.91MB
+ 9bd6fe11d3ee Downloading 63.96MB
+ 9bd6fe11d3ee Downloading 63.96MB
+ 9bd6fe11d3ee Downloading 65.01MB
+ 9bd6fe11d3ee Downloading 66.06MB
+ 9bd6fe11d3ee Downloading 66.06MB
+ 9bd6fe11d3ee Downloading 67.11MB
+ 9bd6fe11d3ee Downloading 68.16MB
+ 9bd6fe11d3ee Downloading 68.16MB
+ 9bd6fe11d3ee Downloading 68.16MB
+ 9bd6fe11d3ee Downloading 69.21MB
+ 9bd6fe11d3ee Downloading 70.25MB
+ 9bd6fe11d3ee Downloading 71.3MB
+ 9bd6fe11d3ee Downloading 71.3MB
+ 9bd6fe11d3ee Downloading 72.35MB
+ 9bd6fe11d3ee Downloading 73.4MB
+ 9bd6fe11d3ee Downloading 73.4MB
+ 9bd6fe11d3ee Downloading 74.45MB
+ 9bd6fe11d3ee Downloading 75.5MB
+ 9bd6fe11d3ee Downloading 75.5MB
+ 9bd6fe11d3ee Downloading 76.55MB
+ 9bd6fe11d3ee Downloading 77.59MB
+ 9bd6fe11d3ee Downloading 77.59MB
+ 9bd6fe11d3ee Downloading 78.64MB
+ 9bd6fe11d3ee Downloading 79.69MB
+ 9bd6fe11d3ee Downloading 79.69MB
+ 9bd6fe11d3ee Downloading 80.74MB
+ 9bd6fe11d3ee Downloading 81.79MB
+ 9bd6fe11d3ee Downloading 81.79MB
+ 9bd6fe11d3ee Downloading 82.84MB
+ 9bd6fe11d3ee Downloading 83.89MB
+ 9bd6fe11d3ee Downloading 84.93MB
+ 9bd6fe11d3ee Downloading 85.98MB
+ 9bd6fe11d3ee Downloading 87.03MB
+ 9bd6fe11d3ee Downloading 87.03MB
+ 9bd6fe11d3ee Downloading 88.08MB
+ 9bd6fe11d3ee Downloading 89.13MB
+ 9bd6fe11d3ee Downloading 90.18MB
+ 9bd6fe11d3ee Downloading 91.23MB
+ 9bd6fe11d3ee Downloading 92.27MB
+ 9bd6fe11d3ee Downloading 92.27MB
+ 9bd6fe11d3ee Downloading 93.32MB
+ 9bd6fe11d3ee Downloading 94.37MB
+ 9bd6fe11d3ee Downloading 94.37MB
+ 9bd6fe11d3ee Downloading 95.42MB
+ 9bd6fe11d3ee Downloading 96.47MB
+ 9bd6fe11d3ee Downloading 97.52MB
+ 9bd6fe11d3ee Downloading 97.52MB
+ 9bd6fe11d3ee Downloading 98.57MB
+ 9bd6fe11d3ee Downloading 99.61MB
+ 9bd6fe11d3ee Downloading 100.7MB
+ 9bd6fe11d3ee Downloading 101.7MB
+ 9bd6fe11d3ee Downloading 102.8MB
+ 9bd6fe11d3ee Downloading 102.8MB
+ 9bd6fe11d3ee Downloading 102.8MB
+ 9bd6fe11d3ee Downloading 102.8MB
+ 9bd6fe11d3ee Downloading 103.8MB
+ 9bd6fe11d3ee Downloading 103.8MB
+ 9bd6fe11d3ee Downloading 104.9MB
+ 9bd6fe11d3ee Downloading 104.9MB
+ 9bd6fe11d3ee Downloading 105.9MB
+ 9bd6fe11d3ee Downloading 105.9MB
+ 9bd6fe11d3ee Downloading 107MB
+ 9bd6fe11d3ee Downloading 108MB
+ 9bd6fe11d3ee Download complete 0B
+ 9bd6fe11d3ee Extracting 1B
+ 9bd6fe11d3ee Extracting 1B
+ 9bd6fe11d3ee Extracting 1B
+ 9bd6fe11d3ee Extracting 1B
+ 9bd6fe11d3ee Extracting 1B
+ 9bd6fe11d3ee Extracting 1B
+ 9bd6fe11d3ee Extracting 1B
+ 9bd6fe11d3ee Extracting 1B
+ 9bd6fe11d3ee Extracting 1B
+ 558630996ec6 Pull complete 0B
+ 09758c49a5ce Pull complete 0B
+ 283a3992cb1d Pull complete 0B
+ ad9358bd2775 Pull complete 0B
+ 55c67dc8322f Pull complete 0B
+ 9bd6fe11d3ee Pull complete 0B
+ Image postgres:16-alpine Pulled 
+ Network docker_default Creating 
+ Network docker_default Created 
+ Volume docker_seesight_pg_data Creating 
+ Volume docker_seesight_pg_data Created 
+ Container seesight-postgres Creating 
+ Container seesight-postgres Created 
+ Container seesight-postgres Starting 
+ Container seesight-postgres Started 
+EXIT:0

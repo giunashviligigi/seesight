@@ -1,0 +1,25 @@
+---
+pid: 11936
+cwd: "/Users/gigi/Desktop/SeeSight"
+command: "mkdir -p /Users/gigi/Desktop/SeeSight/tests/milestone-01 && cd /Users/gigi/Desktop/SeeSight/server && npm run start:dev"
+started_at: 2026-07-15T13:54:01.440Z
+running_for_ms: 45019    
+---
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> server@0.1.0 start:dev
+> nest start --watch
+
+[2J[3J[H[[90m5:54:02 PM[0m] Starting compilation in watch mode...
+
+[[90m5:54:03 PM[0m] Found 0 errors. Watching for file changes.
+
+[Nest] 11986  - 07/15/2026, 5:54:03 PM     LOG [NestFactory] Starting Nest application...
+[Nest] 11986  - 07/15/2026, 5:54:03 PM     LOG [InstanceLoader] AppModule dependencies initialized +5ms
+[Nest] 11986  - 07/15/2026, 5:54:03 PM     LOG [InstanceLoader] PrismaModule dependencies initialized +0ms
+[Nest] 11986  - 07/15/2026, 5:54:03 PM     LOG [InstanceLoader] ConfigHostModule dependencies initialized +21ms
+[Nest] 11986  - 07/15/2026, 5:54:03 PM     LOG [InstanceLoader] HealthModule dependencies initialized +1ms
+[Nest] 11986  - 07/15/2026, 5:54:03 PM     LOG [InstanceLoader] ConfigModule dependencies initialized +0ms
+[Nest] 11986  - 07/15/2026, 5:54:03 PM     LOG [RoutesResolver] HealthController {/health}: +138ms
+[Nest] 11986  - 07/15/2026, 5:54:03 PM     LOG [RouterExplorer] Mapped {/health, GET} route +1ms
+[Nest] 11986  - 07/15/2026, 5:54:03 PM     LOG [NestApplication] Nest application successfully started +1ms
