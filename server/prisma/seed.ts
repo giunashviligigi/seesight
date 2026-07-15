@@ -140,6 +140,9 @@ async function main() {
       firstName: 'Taylor',
       lastName: 'Traveler',
       jobTitle: 'Software Engineer',
+      phone: '+995555000111',
+      nationality: 'GE',
+      preferredAirport: 'TBS',
       status: UserStatus.ACTIVE,
       deletedAt: null,
     },
@@ -152,6 +155,8 @@ async function main() {
       lastName: 'Traveler',
       jobTitle: 'Software Engineer',
       phone: '+995555000111',
+      nationality: 'GE',
+      preferredAirport: 'TBS',
       status: UserStatus.ACTIVE,
     },
   });
@@ -168,6 +173,8 @@ async function main() {
       firstName: 'Sam',
       lastName: 'Sales',
       jobTitle: 'Account Executive',
+      nationality: 'GE',
+      preferredAirport: 'TBS',
       status: UserStatus.ACTIVE,
       deletedAt: null,
     },
@@ -178,8 +185,118 @@ async function main() {
       firstName: 'Sam',
       lastName: 'Sales',
       jobTitle: 'Account Executive',
+      nationality: 'GE',
+      preferredAirport: 'TBS',
       status: UserStatus.ACTIVE,
     },
+  });
+
+  const operations = await prisma.department.upsert({
+    where: {
+      companyId_name: {
+        companyId: company.id,
+        name: 'Operations',
+      },
+    },
+    update: { deletedAt: null, code: 'OPS' },
+    create: {
+      companyId: company.id,
+      name: 'Operations',
+      code: 'OPS',
+    },
+  });
+
+  const firstNames = [
+    'Alex',
+    'Blake',
+    'Casey',
+    'Dana',
+    'Eden',
+    'Finn',
+    'Gray',
+    'Harper',
+    'Indie',
+    'Jordan',
+    'Kai',
+    'Logan',
+    'Morgan',
+    'Noah',
+    'Owen',
+    'Parker',
+    'Quinn',
+    'Riley',
+    'Sage',
+    'Taylor',
+  ];
+  const lastNames = [
+    'Anderson',
+    'Brooks',
+    'Carter',
+    'Diaz',
+    'Evans',
+    'Foster',
+    'Garcia',
+    'Hayes',
+    'Ivy',
+    'Jones',
+    'Kim',
+    'Lopez',
+    'Miller',
+    'Nguyen',
+    'Ortiz',
+    'Patel',
+    'Quinn',
+    'Reed',
+    'Singh',
+    'Turner',
+  ];
+  const titles = [
+    'Analyst',
+    'Coordinator',
+    'Manager',
+    'Specialist',
+    'Associate',
+  ];
+  const departmentIds = [engineering.id, sales.id, operations.id];
+
+  const rosterTarget = 110;
+  for (let i = 1; i <= rosterTarget; i += 1) {
+    const firstName = firstNames[(i - 1) % firstNames.length];
+    const lastName = lastNames[Math.floor((i - 1) / firstNames.length) % lastNames.length];
+    const email = `roster${String(i).padStart(3, '0')}@acme-travel.example`;
+    await prisma.employee.upsert({
+      where: {
+        companyId_email: {
+          companyId: company.id,
+          email,
+        },
+      },
+      update: {
+        firstName,
+        lastName,
+        departmentId: departmentIds[(i - 1) % departmentIds.length],
+        jobTitle: titles[(i - 1) % titles.length],
+        nationality: 'GE',
+        preferredAirport: i % 2 === 0 ? 'TBS' : 'BUS',
+        status: UserStatus.ACTIVE,
+        deletedAt: null,
+      },
+      create: {
+        companyId: company.id,
+        departmentId: departmentIds[(i - 1) % departmentIds.length],
+        email,
+        firstName,
+        lastName,
+        jobTitle: titles[(i - 1) % titles.length],
+        nationality: 'GE',
+        preferredAirport: i % 2 === 0 ? 'TBS' : 'BUS',
+        status: UserStatus.ACTIVE,
+      },
+    });
+  }
+
+  const rosterCount = await prisma.employee.count({
+    where: { companyId: company.id, deletedAt: null },
   });
 
   const existingTrip = await prisma.trip.findFirst({
@@ -310,7 +427,8 @@ async function main() {
         users: [superAdmin.email, companyAdmin.email, employeeUser.email],
         password: 'SecurePass1',
         tripId: trip.id,
-        departments: [engineering.name, sales.name],
+        departments: [engineering.name, sales.name, operations.name],
+        employeeCount: rosterCount,
       },
       null,
       2,

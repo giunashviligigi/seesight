@@ -78,11 +78,26 @@ export default function AccountPage() {
         </Link>
         <div className="flex items-center gap-3">
           <Link
-            href={user.role === "SUPER_ADMIN" ? "/companies" : "/company"}
+            href={
+              user.role === "SUPER_ADMIN"
+                ? "/companies"
+                : user.role === "EMPLOYEE"
+                  ? "/profile"
+                  : "/employees"
+            }
             className="text-sm text-ss-muted lowercase hover:text-ss-text"
           >
-            {user.role === "SUPER_ADMIN" ? "companies" : "company"}
+            {user.role === "SUPER_ADMIN"
+              ? "companies"
+              : user.role === "EMPLOYEE"
+                ? "profile"
+                : "employees"}
           </Link>
+          {user.role === "COMPANY_ADMIN" ? (
+            <Link href="/company" className="text-sm text-ss-muted lowercase hover:text-ss-text">
+              company
+            </Link>
+          ) : null}
           <Button
             onClick={onLogout}
             className="rounded-full bg-ss-accent px-5 text-white lowercase hover:bg-ss-accent-hover"

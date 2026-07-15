@@ -147,22 +147,25 @@ model Department {
 
 /// Company roster profile. May optionally link 1:1 to a User for login.
 model Employee {
-  id           String     @id @default(cuid())
-  companyId    String
-  company      Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  departmentId String?
-  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  userId       String?    @unique
-  user         User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
-  email        String
-  firstName    String
-  lastName     String
-  jobTitle     String?
-  phone        String?
-  status       UserStatus @default(ACTIVE)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  deletedAt    DateTime?
+  id                String     @id @default(cuid())
+  companyId         String
+  company           Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  departmentId      String?
+  department        Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  userId            String?    @unique
+  user              User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  email             String
+  firstName         String
+  lastName          String
+  jobTitle          String?
+  phone             String?
+  nationality       String?
+  passportNumber    String?
+  preferredAirport  String?
+  status            UserStatus @default(ACTIVE)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  deletedAt         DateTime?
 
   tripTravelers TripTraveler[]
 

@@ -1,0 +1,29 @@
+On branch development
+Your branch is up to date with 'origin/development'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   README.md
+	modified:   client/src/app/account/page.tsx
+	modified:   client/src/app/company/page.tsx
+	modified:   docs/DATABASE.md
+	modified:   server/prisma/schema.prisma
+	modified:   server/prisma/seed.ts
+	modified:   server/src/app.module.ts
+	modified:   server/src/common/tenant/tenant.utils.ts
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	client/src/app/employees/
+	client/src/app/profile/
+	client/src/lib/api/departments.ts
+	client/src/lib/api/employees.ts
+	docs/EMPLOYEES.md
+	server/prisma/migrations/20260715155432_employee_travel_profile_fields/
+	server/src/modules/departments/
+	server/src/modules/employees/
+	server/test/employees.e2e-spec.ts
+	tests/milestone-05/
+
+no changes added to commit (use "git add" and/or "git commit -a")

@@ -65,6 +65,7 @@ erDiagram
 | Decision | Detail |
 |----------|--------|
 | Soft delete | `Company`, `Department`, `Employee`, `Trip` use `deletedAt` (nullable). Application queries should filter `deletedAt: null`. |
+| Employee travel fields | Optional `nationality`, `passportNumber`, `preferredAirport` on `Employee` (Milestone 5). |
 | Hard delete / cascade | `PasswordResetToken` cascades with `User`. Trip child rows (`TripTraveler`, `Approval`, snapshots, AI rows) cascade with `Trip`. `ReportCache` cascades with `Company`. |
 | Restrict | Deleting a `User` who created trips or approval actions is restricted while those rows exist. Deleting an `Employee` referenced by `TripTraveler` is restricted. |
 | Company unlink | `User.companyId` uses `onDelete: SetNull` so removing a company does not destroy auth users (they become unassigned). |
@@ -100,7 +101,8 @@ Creates:
 | Super admin | `superadmin@seesight.local` / `SecurePass1` |
 | Company admin | `admin@acme-travel.example` / `SecurePass1` |
 | Employee user | `traveler@acme-travel.example` / `SecurePass1` |
-| Departments | Engineering, Sales |
+| Departments | Engineering, Sales, Operations |
+| Roster | 110+ seeded employees (`roster001@…`) for pagination demos |
 | Sample trip | Berlin onboarding (`PENDING_APPROVAL`) with travelers, approval action, flight/hotel snapshots, AI recommendation, report cache |
 
 ## Migration discipline
