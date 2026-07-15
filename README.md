@@ -736,8 +736,8 @@ You are the **lead software engineer** of this project.
 | Field | Value |
 |-------|--------|
 | Project stage | In development |
-| Current milestone | Milestone 3 — Database Design **complete** |
-| Next milestone | Milestone 4 — Company Management |
+| Current milestone | Milestone 4 — Company Management **complete** |
+| Next milestone | Milestone 5 — Employee Management |
 | Version | v0.1.0 |
 | Design | Figma Landing + Pitch Deck locked as UI source of truth |
 | Active branch | `development` |

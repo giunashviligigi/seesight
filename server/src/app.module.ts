@@ -6,6 +6,7 @@ import { PrismaModule } from './common/prisma/prisma.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AccountModule } from './modules/account/account.module';
+import { CompaniesModule } from './modules/companies/companies.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
 
@@ -19,6 +20,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     HealthModule,
     AuthModule,
     AccountModule,
+    CompaniesModule,
   ],
   providers: [
     {

@@ -76,12 +76,20 @@ export default function AccountPage() {
         <Link href="/" className="text-sm font-semibold tracking-[0.35em] text-ss-text uppercase">
           Seesight
         </Link>
-        <Button
-          onClick={onLogout}
-          className="rounded-full bg-ss-accent px-5 text-white lowercase hover:bg-ss-accent-hover"
-        >
-          log out
-        </Button>
+        <div className="flex items-center gap-3">
+          <Link
+            href={user.role === "SUPER_ADMIN" ? "/companies" : "/company"}
+            className="text-sm text-ss-muted lowercase hover:text-ss-text"
+          >
+            {user.role === "SUPER_ADMIN" ? "companies" : "company"}
+          </Link>
+          <Button
+            onClick={onLogout}
+            className="rounded-full bg-ss-accent px-5 text-white lowercase hover:bg-ss-accent-hover"
+          >
+            log out
+          </Button>
+        </div>
       </header>
 
       <section className="mt-16 rounded-3xl border border-white/15 bg-ss-surface p-8">

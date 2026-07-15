@@ -1,0 +1,14 @@
+## development...origin/development
+ M README.md
+ M client/src/app/account/page.tsx
+ M client/src/app/page.tsx
+ M server/src/app.module.ts
+ M tests/README.md
+?? client/src/app/companies/
+?? client/src/app/company/
+?? client/src/lib/api/companies.ts
+?? docs/COMPANIES.md
+?? server/src/common/tenant/
+?? server/src/modules/companies/
+?? server/test/companies.e2e-spec.ts
+?? tests/milestone-04/

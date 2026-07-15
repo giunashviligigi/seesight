@@ -62,6 +62,12 @@ export default function HomePage() {
           >
             open account
           </Link>
+          <Link
+            href="/company"
+            className="inline-flex items-center justify-center rounded-full border border-white/20 px-8 py-2.5 text-sm text-ss-text lowercase transition-colors hover:bg-white/5"
+          >
+            company settings
+          </Link>
           <a
             href={`${apiBaseUrl}/health`}
             className="inline-flex items-center justify-center rounded-full border border-white/20 px-8 py-2.5 text-sm text-ss-text lowercase transition-colors hover:bg-white/5"
