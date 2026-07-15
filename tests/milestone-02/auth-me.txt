@@ -1,0 +1,2 @@
+{"id":"cmrm6a6zm0000o91wmn3uixfn","email":"m2_1784125542@seesight.test","firstName":"Mile","lastName":"Two","role":"COMPANY_ADMIN","status":"ACTIVE","companyId":null,"createdAt":"2026-07-15T14:25:42.370Z"}
+HTTP:200

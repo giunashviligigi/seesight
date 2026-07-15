@@ -7,5 +7,45 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Domain models are intentionally omitted in Milestone 1.
-// Milestone 2+ will introduce User, Company, Trip, and related entities.
+enum UserRole {
+  SUPER_ADMIN
+  COMPANY_ADMIN
+  EMPLOYEE
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  firstName    String?
+  lastName     String?
+  role         UserRole   @default(COMPANY_ADMIN)
+  status       UserStatus @default(ACTIVE)
+  /// Linked in Milestone 4 when Company entity is introduced.
+  companyId    String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  passwordResetTokens PasswordResetToken[]
+
+  @@index([companyId])
+  @@index([status])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}

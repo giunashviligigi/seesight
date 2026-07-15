@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
@@ -16,19 +18,20 @@ export default function HomePage() {
             Seesight
           </span>
         </div>
-        <span
-          aria-label="profile"
-          className="inline-flex size-9 items-center justify-center rounded-full bg-[#9fd4ff]/20 text-[#9fd4ff]"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            className="size-5"
-            fill="currentColor"
-            aria-hidden
+        <div className="flex items-center gap-3">
+          <Link
+            href="/login"
+            className="rounded-full px-4 py-2 text-sm text-ss-text lowercase hover:bg-white/5"
           >
-            <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z" />
-          </svg>
-        </span>
+            log in
+          </Link>
+          <Link
+            href="/register"
+            className="rounded-full bg-ss-accent px-4 py-2 text-sm text-white lowercase hover:bg-ss-accent-hover"
+          >
+            register
+          </Link>
+        </div>
       </header>
 
       <section className="mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-6 pb-24 pt-8">
@@ -41,24 +44,29 @@ export default function HomePage() {
         </p>
 
         <p className="mt-6 max-w-lg text-base text-ss-muted lowercase">
-          project foundation is ready. api health lives at{" "}
+          ai-powered business travel management. sign in to manage trips, or
+          open the api docs at{" "}
           <a
-            href={`${apiBaseUrl}/health`}
+            href={`${apiBaseUrl}/docs`}
             className="text-ss-text underline-offset-4 hover:underline"
           >
-            {apiBaseUrl}/health
+            {apiBaseUrl}/docs
           </a>
           .
         </p>
 
-        <div className="mt-10">
-          <a
-            href={`${apiBaseUrl}/docs`}
-            target="_blank"
-            rel="noreferrer"
+        <div className="mt-10 flex flex-wrap gap-3">
+          <Link
+            href="/account"
             className="inline-flex items-center justify-center rounded-full bg-ss-accent px-8 py-2.5 text-sm text-white lowercase transition-colors hover:bg-ss-accent-hover"
           >
-            open api docs
+            open account
+          </Link>
+          <a
+            href={`${apiBaseUrl}/health`}
+            className="inline-flex items-center justify-center rounded-full border border-white/20 px-8 py-2.5 text-sm text-ss-text lowercase transition-colors hover:bg-white/5"
+          >
+            api health
           </a>
         </div>
       </section>

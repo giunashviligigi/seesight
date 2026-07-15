@@ -19,4 +19,5 @@ npx prisma migrate dev --name <migration_name>
 npx prisma studio
 ```
 
-Milestone 1 ships an empty schema (datasource only) so the migration workflow is ready without domain models yet.
+Milestone 1 shipped an empty schema. Milestone 2 added `User` and `PasswordResetToken` via migration `20260715142221_auth_user_and_password_reset`.
+

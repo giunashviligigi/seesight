@@ -1,0 +1,2 @@
+{"accessToken":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjbXJtNmE2em0wMDAwbzkxd21uM3VpeGZuIiwiZW1haWwiOiJtMl8xNzg0MTI1NTQyQHNlZXNpZ2h0LnRlc3QiLCJyb2xlIjoiQ09NUEFOWV9BRE1JTiIsImlhdCI6MTc4NDEyNTU0MiwiZXhwIjoxNzg0MjExOTQyfQ.fRp-0qcMBASVRkNibT2wZuNhu6epKWzCdlJNF8XaqGI","user":{"id":"cmrm6a6zm0000o91wmn3uixfn","email":"m2_1784125542@seesight.test","firstName":"Mile","lastName":"Two","role":"COMPANY_ADMIN","status":"ACTIVE","companyId":null,"createdAt":"2026-07-15T14:25:42.370Z"}}
+HTTP:201

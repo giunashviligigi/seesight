@@ -1,0 +1,2 @@
+{"message":"Protected resource accessible","userId":"cmrm6a6zm0000o91wmn3uixfn","role":"COMPANY_ADMIN"}
+HTTP:200
