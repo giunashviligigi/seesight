@@ -4,7 +4,7 @@
 
 | Topic | Choice |
 |-------|--------|
-| Registration | Company-admin self-signup (`COMPANY_ADMIN`). `companyId` stays `null` until Milestone 4. |
+| Registration | Company-admin self-signup (`COMPANY_ADMIN`). `companyId` may be `null` until a `Company` is assigned (see Milestone 3/4). |
 | Password hashing | bcrypt (12 rounds) |
 | Tokens | Access JWT only (no refresh tokens in M2) |
 | Session | httpOnly cookie (`seesight_access_token`) **and** Bearer token body/header for Swagger + cross-port local Next.js |

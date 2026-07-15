@@ -1,0 +1,14 @@
+{
+  "companies": 1,
+  "users": 4,
+  "departments": 2,
+  "employees": 2,
+  "trips": 1,
+  "tripTravelers": 2,
+  "approvals": 1,
+  "approvalActions": 1,
+  "flightSnapshots": 1,
+  "hotelSnapshots": 1,
+  "aiRecommendations": 1,
+  "reportCaches": 1
+}

@@ -32,6 +32,16 @@ Connection string (matches `.env.example`):
 postgresql://seesight:seesight@localhost:5432/seesight?schema=public
 ```
 
+Apply migrations and seed demo data:
+
+```bash
+cd server
+npx prisma migrate dev
+npm run prisma:seed
+```
+
+See [`DATABASE.md`](./DATABASE.md) for the ERD and seed accounts.
+
 ## 3. Run API
 
 ```bash

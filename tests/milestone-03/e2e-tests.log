@@ -1,0 +1,12 @@
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> server@0.1.0 test:e2e
+> jest --config ./test/jest-e2e.json
+
+
+Test Suites: 2 passed, 2 total
+Tests:       5 passed, 5 total
+Snapshots:   0 total
+Time:        2.372 s, estimated 3 s
+Ran all test suites.
+EXIT:0

@@ -1,0 +1,28 @@
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> server@0.1.0 prisma:seed
+> prisma db seed
+
+warn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., `prisma.config.ts`).
+For more information, see: https://pris.ly/prisma-config
+
+Environment variables loaded from .env
+Running seed command `ts-node --compiler-options {"module":"CommonJS"} prisma/seed.ts` ...
+{
+  "seeded": true,
+  "company": "acme-travel",
+  "users": [
+    "superadmin@seesight.local",
+    "admin@acme-travel.example",
+    "traveler@acme-travel.example"
+  ],
+  "password": "SecurePass1",
+  "tripId": "cmrm90t4l000go9ywy25nzb5w",
+  "departments": [
+    "Engineering",
+    "Sales"
+  ]
+}
+
+🌱  The seed command has been executed.
+EXIT:0

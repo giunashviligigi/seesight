@@ -6,7 +6,7 @@ Verification outputs for SeeSight Business, organized by milestone.
 |-----------|--------|--------|
 | 1 — Project Setup | [`milestone-01/`](./milestone-01/) | Passed (2026-07-15) |
 | 2 — Authentication | [`milestone-02/`](./milestone-02/) | Passed (2026-07-15) |
-| 3 — Database Design | — | Pending |
+| 3 — Database Design | [`milestone-03/`](./milestone-03/) | Passed (2026-07-15) |
 | 4 — Company Management | — | Pending |
 | 5 — Employee Management | — | Pending |
 | 6 — Dashboard | — | Pending |
