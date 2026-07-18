@@ -280,6 +280,9 @@ export default function EmployeesPage() {
           Seesight
         </Link>
         <div className="flex gap-3">
+          <Link href="/dashboard" className="text-sm text-ss-muted lowercase hover:text-ss-text">
+            dashboard
+          </Link>
           <Link href="/company" className="text-sm text-ss-muted lowercase hover:text-ss-text">
             company
           </Link>

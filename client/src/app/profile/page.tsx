@@ -61,9 +61,14 @@ export default function ProfilePage() {
         <Link href="/" className="text-sm font-semibold tracking-[0.35em] text-ss-text uppercase">
           Seesight
         </Link>
-        <Link href="/account" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-          account
-        </Link>
+        <div className="flex gap-3">
+          <Link href="/dashboard" className="text-sm text-ss-muted lowercase hover:text-ss-text">
+            dashboard
+          </Link>
+          <Link href="/account" className="text-sm text-ss-muted lowercase hover:text-ss-text">
+            account
+          </Link>
+        </div>
       </header>
 
       <section className="mt-12 rounded-3xl border border-white/15 bg-ss-surface p-8">

@@ -77,6 +77,11 @@ export default function AccountPage() {
           Seesight
         </Link>
         <div className="flex items-center gap-3">
+          {(user.role === "COMPANY_ADMIN" || user.role === "EMPLOYEE") && user.companyId ? (
+            <Link href="/dashboard" className="text-sm text-ss-muted lowercase hover:text-ss-text">
+              dashboard
+            </Link>
+          ) : null}
           <Link
             href={
               user.role === "SUPER_ADMIN"

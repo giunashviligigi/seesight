@@ -25,7 +25,7 @@ SeeSight Business is a monorepo with a separated Next.js client and NestJS API, 
 | `docker/` | Dockerfiles + Compose for local stack |
 | `docs/` | Architecture, setup, design |
 
-## Backend modules (Milestone 1)
+## Backend modules
 
 ```
 server/src/
@@ -33,10 +33,18 @@ server/src/
 ├── app.module.ts
 ├── config/
 ├── common/prisma/
-└── modules/health/    # GET /health
+├── common/tenant/
+└── modules/
+    ├── health/       # GET /health
+    ├── auth/
+    ├── account/
+    ├── companies/
+    ├── departments/
+    ├── employees/
+    └── dashboard/    # GET /dashboard/summary (M6)
 ```
 
-Future business modules (`auth`, `companies`, `employees`, `trips`, …) will land under `modules/` following Controller → Service → DTO conventions from `AGENTS.md`.
+Business modules follow Controller → Service → DTO conventions from `AGENTS.md`.
 
 ## Local ports
 
