@@ -736,8 +736,8 @@ You are the **lead software engineer** of this project.
 | Field | Value |
 |-------|--------|
 | Project stage | In development |
-| Current milestone | Milestone 6 — Dashboard **complete** |
-| Next milestone | Milestone 7 — Trip Management |
+| Current milestone | Milestone 7 — Trip Management **complete** |
+| Next milestone | Milestone 8 — Travel Search |
 | Version | v0.1.0 |
 | Design | Figma Landing + Pitch Deck locked as UI source of truth |
 | Active branch | `development` |

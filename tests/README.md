@@ -10,7 +10,7 @@ Verification outputs for SeeSight Business, organized by milestone.
 | 4 — Company Management | [`milestone-04/`](./milestone-04/) | Passed (2026-07-15) |
 | 5 — Employee Management | — | Passed (implemented; verify locally) |
 | 6 — Dashboard | — | Unit tests passed; e2e needs running Postgres |
-| 7 — Trip Management | — | Pending |
+| 7 — Trip Management | — | Unit tests in `server/`; e2e needs Postgres |
 | 8 — Travel Search | — | Pending |
 | 9 — AI Recommendations | — | Pending |
 | 10 — Approval Workflow | — | Pending |

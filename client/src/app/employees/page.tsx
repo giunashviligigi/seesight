@@ -283,6 +283,9 @@ export default function EmployeesPage() {
           <Link href="/dashboard" className="text-sm text-ss-muted lowercase hover:text-ss-text">
             dashboard
           </Link>
+          <Link href="/trips" className="text-sm text-ss-muted lowercase hover:text-ss-text">
+            trips
+          </Link>
           <Link href="/company" className="text-sm text-ss-muted lowercase hover:text-ss-text">
             company
           </Link>

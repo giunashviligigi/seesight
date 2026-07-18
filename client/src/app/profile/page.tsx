@@ -65,6 +65,9 @@ export default function ProfilePage() {
           <Link href="/dashboard" className="text-sm text-ss-muted lowercase hover:text-ss-text">
             dashboard
           </Link>
+          <Link href="/trips" className="text-sm text-ss-muted lowercase hover:text-ss-text">
+            trips
+          </Link>
           <Link href="/account" className="text-sm text-ss-muted lowercase hover:text-ss-text">
             account
           </Link>

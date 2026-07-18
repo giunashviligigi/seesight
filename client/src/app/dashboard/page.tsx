@@ -91,6 +91,9 @@ export default function DashboardPage() {
           Seesight
         </Link>
         <nav className="flex flex-wrap items-center justify-end gap-3">
+          <Link href="/trips" className="text-sm text-ss-muted lowercase hover:text-ss-text">
+            trips
+          </Link>
           {isEmployee ? (
             <Link href="/profile" className="text-sm text-ss-muted lowercase hover:text-ss-text">
               profile
@@ -203,22 +206,26 @@ export default function DashboardPage() {
               {summary.upcomingTrips.length > 0 ? (
                 <ul className="mt-6 divide-y divide-white/10">
                   {summary.upcomingTrips.map((trip) => (
-                    <li
-                      key={trip.id}
-                      className="flex flex-col gap-1 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div>
-                        <p className="text-ss-text lowercase">{trip.purpose}</p>
-                        <p className="mt-1 text-sm text-ss-muted lowercase">
-                          {destinationLabel(trip)}
-                        </p>
-                      </div>
-                      <div className="text-sm text-ss-muted lowercase sm:text-right">
-                        <p>
-                          {trip.startDate} → {trip.endDate}
-                        </p>
-                        <p className="mt-1">{trip.status.replaceAll("_", " ").toLowerCase()}</p>
-                      </div>
+                    <li key={trip.id} className="py-4 first:pt-0 last:pb-0">
+                      <Link
+                        href={`/trips/${trip.id}`}
+                        className="flex flex-col gap-1 transition hover:opacity-90 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div>
+                          <p className="text-ss-text lowercase">{trip.purpose}</p>
+                          <p className="mt-1 text-sm text-ss-muted lowercase">
+                            {destinationLabel(trip)}
+                          </p>
+                        </div>
+                        <div className="text-sm text-ss-muted lowercase sm:text-right">
+                          <p>
+                            {trip.startDate} → {trip.endDate}
+                          </p>
+                          <p className="mt-1">
+                            {trip.status.replaceAll("_", " ").toLowerCase()}
+                          </p>
+                        </div>
+                      </Link>
                     </li>
                   ))}
                 </ul>

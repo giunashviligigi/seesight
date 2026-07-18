@@ -41,7 +41,8 @@ server/src/
     ├── companies/
     ├── departments/
     ├── employees/
-    └── dashboard/    # GET /dashboard/summary (M6)
+    ├── dashboard/    # GET /dashboard/summary (M6)
+    └── trips/        # Trip CRUD + status machine (M7)
 ```
 
 Business modules follow Controller → Service → DTO conventions from `AGENTS.md`.
