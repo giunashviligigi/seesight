@@ -738,8 +738,8 @@ You are the **lead software engineer** of this project.
 | Field | Value |
 |-------|--------|
 | Project stage | In development |
-| Current milestone | Milestone 9 — AI Recommendations **complete** |
-| Next milestone | Milestone 10 — Approval Workflow |
+| Current milestone | Milestone 10 — Approval Workflow **complete** |
+| Next milestone | Milestone 11 — Reports |
 | Version | v0.1.0 |
 | Design | Figma Landing + Pitch Deck locked as UI source of truth |
 | Active branch | `development` |

@@ -13,6 +13,8 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { TripsModule } from './modules/trips/trips.module';
 import { TravelSearchModule } from './modules/travel-search/travel-search.module';
 import { AiModule } from './modules/ai/ai.module';
+import { ApprovalsModule } from './modules/approvals/approvals.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
 
@@ -33,6 +35,8 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     TripsModule,
     TravelSearchModule,
     AiModule,
+    NotificationsModule,
+    ApprovalsModule,
   ],
   providers: [
     {

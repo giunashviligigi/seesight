@@ -7,11 +7,13 @@ import {
 import {
   ApprovalActionType,
   ApprovalStatus,
+  NotificationType,
   OfferProvider,
   Prisma,
   TravelClass,
   TripStatus,
   UserRole,
+  UserStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import {
@@ -20,6 +22,7 @@ import {
   resolveTenantCompanyId,
 } from '../../common/tenant/tenant.utils';
 import { RequestUser } from '../auth/types/auth.types';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   AttachFlightOfferDto,
   AttachHotelOfferDto,
@@ -36,9 +39,9 @@ import {
   TripResponseDto,
 } from './dto/trip-response.dto';
 
+/** Field edits + offer attach allowed only before submit / after rejection. */
 const EDITABLE_STATUSES: TripStatus[] = [
   TripStatus.DRAFT,
-  TripStatus.PENDING_APPROVAL,
   TripStatus.REJECTED,
 ];
 
@@ -67,7 +70,10 @@ type TripRecord = Prisma.TripGetPayload<{
 
 @Injectable()
 export class TripsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   async create(
     actor: RequestUser,
@@ -307,6 +313,7 @@ export class TripsService {
       });
     });
 
+    await this.notifyAdminsOfSubmission(updated, actor.id);
     return this.toResponse(updated);
   }
 
@@ -331,7 +338,11 @@ export class TripsService {
     return this.toResponse(updated);
   }
 
-  async approve(actor: RequestUser, id: string): Promise<TripResponseDto> {
+  async approve(
+    actor: RequestUser,
+    id: string,
+    comment?: string,
+  ): Promise<TripResponseDto> {
     assertCanManageCompany(actor);
     return this.transitionWithApproval(
       actor,
@@ -339,6 +350,7 @@ export class TripsService {
       TripStatus.APPROVED,
       ApprovalStatus.APPROVED,
       ApprovalActionType.APPROVE,
+      comment,
     );
   }
 
@@ -497,6 +509,7 @@ export class TripsService {
   ): Promise<TripResponseDto> {
     const trip = await this.findAccessibleTrip(actor, id);
     assertCompanyAccess(actor, trip.companyId);
+    this.assertNotSelfApprover(actor, trip);
     this.assertTransition(trip.status, nextStatus);
 
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -538,7 +551,95 @@ export class TripsService {
       });
     });
 
+    if (action === ApprovalActionType.APPROVE) {
+      await this.notifyTripStakeholders(
+        updated,
+        actor.id,
+        NotificationType.TRIP_APPROVED,
+        'Trip approved',
+        `Your trip "${updated.purpose}" was approved.`,
+      );
+    } else if (action === ApprovalActionType.REJECT) {
+      await this.notifyTripStakeholders(
+        updated,
+        actor.id,
+        NotificationType.TRIP_REJECTED,
+        'Trip rejected',
+        comment?.trim()
+          ? `Your trip "${updated.purpose}" was rejected: ${comment.trim()}`
+          : `Your trip "${updated.purpose}" was rejected.`,
+      );
+    }
+
     return this.toResponse(updated);
+  }
+
+  private assertNotSelfApprover(actor: RequestUser, trip: TripRecord): void {
+    if (trip.createdByUserId === actor.id) {
+      throw new ForbiddenException('You cannot approve or reject your own trip');
+    }
+
+    const isTraveler = trip.travelers.some(
+      (t) => t.employee.userId === actor.id,
+    );
+    if (isTraveler) {
+      throw new ForbiddenException(
+        'You cannot approve or reject a trip you are traveling on',
+      );
+    }
+  }
+
+  private async notifyAdminsOfSubmission(
+    trip: TripRecord,
+    submitterId: string,
+  ): Promise<void> {
+    const admins = await this.prisma.user.findMany({
+      where: {
+        companyId: trip.companyId,
+        role: UserRole.COMPANY_ADMIN,
+        status: UserStatus.ACTIVE,
+        id: { not: submitterId },
+      },
+      select: { id: true },
+    });
+
+    await this.notificationsService.createMany(
+      admins.map((admin) => ({
+        userId: admin.id,
+        type: NotificationType.TRIP_SUBMITTED,
+        title: 'Trip submitted for approval',
+        body: `"${trip.purpose}" is waiting for review.`,
+        tripId: trip.id,
+      })),
+    );
+  }
+
+  private async notifyTripStakeholders(
+    trip: TripRecord,
+    actorId: string,
+    type: NotificationType,
+    title: string,
+    body: string,
+  ): Promise<void> {
+    const recipientIds = new Set<string>();
+    if (trip.createdByUserId !== actorId) {
+      recipientIds.add(trip.createdByUserId);
+    }
+    for (const traveler of trip.travelers) {
+      if (traveler.employee.userId && traveler.employee.userId !== actorId) {
+        recipientIds.add(traveler.employee.userId);
+      }
+    }
+
+    await this.notificationsService.createMany(
+      [...recipientIds].map((userId) => ({
+        userId,
+        type,
+        title,
+        body,
+        tripId: trip.id,
+      })),
+    );
   }
 
   private async simpleTransition(

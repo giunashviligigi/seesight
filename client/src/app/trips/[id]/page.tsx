@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { authApi, AuthUser, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
 import { tripsApi, Trip } from "@/lib/api/trips";
+import { approvalsApi, ApprovalHistory } from "@/lib/api/approvals";
 import { FlightOffer, HotelOffer } from "@/lib/api/travel";
 import { TripSearchWidget } from "@/components/travel/trip-search-widget";
 import { AskAiPanel } from "@/components/travel/ask-ai-panel";
@@ -17,7 +18,7 @@ function formatStatus(status: string) {
   return status.replaceAll("_", " ").toLowerCase();
 }
 
-const EDITABLE = new Set(["DRAFT", "PENDING_APPROVAL", "REJECTED"]);
+const EDITABLE = new Set(["DRAFT", "REJECTED"]);
 
 export default function TripDetailPage() {
   const router = useRouter();
@@ -26,6 +27,8 @@ export default function TripDetailPage() {
 
   const [user, setUser] = useState<AuthUser | null>(null);
   const [trip, setTrip] = useState<Trip | null>(null);
+  const [history, setHistory] = useState<ApprovalHistory | null>(null);
+  const [decisionComment, setDecisionComment] = useState("");
   const [purpose, setPurpose] = useState("");
   const [destinationCountry, setDestinationCountry] = useState("");
   const [destinationCity, setDestinationCity] = useState("");
@@ -74,6 +77,12 @@ export default function TripDetailPage() {
         }
         const data = await tripsApi.getById(tripId, token);
         applyTrip(data);
+        try {
+          const audit = await approvalsApi.history(tripId, token);
+          setHistory(audit);
+        } catch {
+          setHistory(null);
+        }
       } catch (err) {
         if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
           storeAccessToken(null);
@@ -95,6 +104,14 @@ export default function TripDetailPage() {
       const next = await action();
       applyTrip(next);
       setMessage(success);
+      const token = getStoredAccessToken();
+      if (token) {
+        try {
+          setHistory(await approvalsApi.history(tripId, token));
+        } catch {
+          // history optional
+        }
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Action failed");
     } finally {
@@ -154,9 +171,19 @@ export default function TripDetailPage() {
         <Link href="/" className="text-sm font-semibold tracking-[0.35em] text-ss-text uppercase">
           Seesight
         </Link>
-        <Link href="/trips" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-          trips
-        </Link>
+        <nav className="flex gap-3">
+          <Link href="/trips" className="text-sm text-ss-muted lowercase hover:text-ss-text">
+            trips
+          </Link>
+          {isAdmin ? (
+            <Link href="/approvals" className="text-sm text-ss-muted lowercase hover:text-ss-text">
+              approvals
+            </Link>
+          ) : null}
+          <Link href="/notifications" className="text-sm text-ss-muted lowercase hover:text-ss-text">
+            notifications
+          </Link>
+        </nav>
       </header>
 
       <section className="mt-12 rounded-3xl border border-white/15 bg-ss-surface p-8">
@@ -197,32 +224,59 @@ export default function TripDetailPage() {
             </Button>
           ) : null}
           {trip.status === "PENDING_APPROVAL" && isAdmin && token ? (
-            <>
-              <Button
-                disabled={busy}
-                onClick={() =>
-                  void runAction(
-                    () => tripsApi.approve(trip.id, token),
-                    "trip approved.",
-                  )
-                }
-                className="rounded-full bg-ss-accent px-4 text-white lowercase hover:bg-ss-accent-hover"
-              >
-                approve
-              </Button>
-              <Button
-                disabled={busy}
-                onClick={() =>
-                  void runAction(
-                    () => tripsApi.reject(trip.id, undefined, token),
-                    "trip rejected.",
-                  )
-                }
-                className="rounded-full border border-white/20 bg-transparent px-4 text-ss-text lowercase hover:bg-white/5"
-              >
-                reject
-              </Button>
-            </>
+            <div className="w-full space-y-3">
+              <div className="space-y-2">
+                <Label className="lowercase text-ss-muted">decision comment</Label>
+                <Input
+                  value={decisionComment}
+                  onChange={(e) => setDecisionComment(e.target.value)}
+                  className="h-11 rounded-xl border-white/20 bg-ss-surface-strong text-ss-text"
+                  placeholder="optional note"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  disabled={busy}
+                  onClick={() =>
+                    void runAction(
+                      () =>
+                        approvalsApi.approve(
+                          trip.id,
+                          decisionComment || undefined,
+                          token,
+                        ),
+                      "trip approved.",
+                    )
+                  }
+                  className="rounded-full bg-ss-accent px-4 text-white lowercase hover:bg-ss-accent-hover"
+                >
+                  approve
+                </Button>
+                <Button
+                  disabled={busy}
+                  onClick={() =>
+                    void runAction(
+                      () =>
+                        approvalsApi.reject(
+                          trip.id,
+                          decisionComment || undefined,
+                          token,
+                        ),
+                      "trip rejected.",
+                    )
+                  }
+                  className="rounded-full border border-white/20 bg-transparent px-4 text-ss-text lowercase hover:bg-white/5"
+                >
+                  reject
+                </Button>
+                <Link
+                  href="/approvals"
+                  className="inline-flex items-center text-sm text-ss-muted lowercase hover:text-ss-text"
+                >
+                  open queue
+                </Link>
+              </div>
+            </div>
           ) : null}
           {trip.status === "APPROVED" && isAdmin && token ? (
             <Button
@@ -296,6 +350,27 @@ export default function TripDetailPage() {
             ))}
           </ul>
         </div>
+
+        {history && history.actions.length > 0 ? (
+          <div className="mt-8">
+            <h2 className="text-lg font-medium text-ss-text lowercase">approval history</h2>
+            <ul className="mt-3 space-y-3 text-sm lowercase">
+              {history.actions.map((action) => (
+                <li key={action.id} className="border-l border-white/15 pl-3">
+                  <p className="text-ss-text">
+                    {formatStatus(action.action)} · {action.actorName ?? action.actorEmail}
+                  </p>
+                  {action.comment ? (
+                    <p className="mt-1 text-ss-muted">{action.comment}</p>
+                  ) : null}
+                  <p className="mt-1 text-xs text-ss-muted">
+                    {new Date(action.createdAt).toLocaleString()}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         <div className="mt-8 grid gap-4 text-sm lowercase sm:grid-cols-2">
           <div className="rounded-2xl border border-white/10 bg-ss-surface-strong p-4">

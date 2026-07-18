@@ -43,7 +43,9 @@ server/src/
     ├── dashboard/        # GET /dashboard/summary (M6)
     ├── trips/            # Trip CRUD + status machine + offer attach (M7/M8)
     ├── travel-search/    # SerpAPI Google Flights / Hotels (M8)
-    └── ai/               # Gemini itinerary recommendations (M9)
+    ├── ai/               # Gemini itinerary recommendations (M9)
+    ├── approvals/        # Pending queue + history (M10)
+    └── notifications/    # In-app notifications (M10)
 ```
 
 Business modules follow Controller → Service → DTO conventions from `AGENTS.md`.

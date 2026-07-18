@@ -94,6 +94,14 @@ export default function DashboardPage() {
           <Link href="/trips" className="text-sm text-ss-muted lowercase hover:text-ss-text">
             trips
           </Link>
+          {!isEmployee ? (
+            <Link href="/approvals" className="text-sm text-ss-muted lowercase hover:text-ss-text">
+              approvals
+            </Link>
+          ) : null}
+          <Link href="/notifications" className="text-sm text-ss-muted lowercase hover:text-ss-text">
+            notifications
+          </Link>
           {isEmployee ? (
             <Link href="/profile" className="text-sm text-ss-muted lowercase hover:text-ss-text">
               profile
@@ -161,6 +169,14 @@ export default function DashboardPage() {
                 <p className="mt-3 text-3xl font-medium text-ss-text">
                   {summary.pendingApprovalsCount}
                 </p>
+                {!isEmployee ? (
+                  <Link
+                    href="/approvals"
+                    className="mt-3 inline-block text-xs text-ss-accent lowercase hover:underline"
+                  >
+                    review queue
+                  </Link>
+                ) : null}
               </article>
             </div>
 

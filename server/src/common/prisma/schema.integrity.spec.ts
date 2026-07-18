@@ -17,6 +17,7 @@ describe('Prisma domain schema (Milestone 3)', () => {
         'Employee',
         'FlightOfferSnapshot',
         'HotelOfferSnapshot',
+        'Notification',
         'PasswordResetToken',
         'ReportCache',
         'Trip',

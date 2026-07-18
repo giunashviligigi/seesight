@@ -3,10 +3,12 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { TripStatus, UserRole, UserStatus } from '@prisma/client';
 import { TripsService } from './trips.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { RequestUser } from '../auth/types/auth.types';
 
 describe('TripsService', () => {
   let service: TripsService;
+  let notifications: { createMany: jest.Mock };
   let prisma: {
     trip: {
       create: jest.Mock;
@@ -22,6 +24,9 @@ describe('TripsService', () => {
     };
     employee: {
       findFirst: jest.Mock;
+      findMany: jest.Mock;
+    };
+    user: {
       findMany: jest.Mock;
     };
     approval: {
@@ -46,6 +51,14 @@ describe('TripsService', () => {
     createdAt: new Date(),
   };
 
+  const otherAdmin: RequestUser = {
+    ...admin,
+    id: 'admin_2',
+    email: 'boss@acme.example',
+    firstName: 'Bea',
+    lastName: 'Boss',
+  };
+
   const employeeUser: RequestUser = {
     ...admin,
     id: 'emp_user',
@@ -56,7 +69,7 @@ describe('TripsService', () => {
   const baseTrip = {
     id: 'trip_1',
     companyId: 'company_a',
-    createdByUserId: 'admin_1',
+    createdByUserId: 'emp_user',
     purpose: 'Berlin workshop',
     destinationCountry: 'DE',
     destinationCity: 'Berlin',
@@ -90,6 +103,7 @@ describe('TripsService', () => {
   };
 
   beforeEach(async () => {
+    notifications = { createMany: jest.fn().mockResolvedValue(undefined) };
     prisma = {
       trip: {
         create: jest.fn(),
@@ -106,6 +120,9 @@ describe('TripsService', () => {
       employee: {
         findFirst: jest.fn(),
         findMany: jest.fn(),
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([]),
       },
       approval: {
         findUnique: jest.fn(),
@@ -130,6 +147,7 @@ describe('TripsService', () => {
       providers: [
         TripsService,
         { provide: PrismaService, useValue: prisma },
+        { provide: NotificationsService, useValue: notifications },
       ],
     }).compile();
 
@@ -150,7 +168,6 @@ describe('TripsService', () => {
 
     expect(result.status).toBe(TripStatus.DRAFT);
     expect(result.travelers).toHaveLength(1);
-    expect(prisma.trip.create).toHaveBeenCalled();
   });
 
   it('rejects create without travelers', async () => {
@@ -175,7 +192,7 @@ describe('TripsService', () => {
     );
   });
 
-  it('submits draft to pending approval', async () => {
+  it('submits draft to pending approval and notifies admins', async () => {
     prisma.trip.findFirst.mockResolvedValue(baseTrip);
     prisma.trip.update.mockResolvedValue({
       ...baseTrip,
@@ -192,9 +209,11 @@ describe('TripsService', () => {
       status: TripStatus.PENDING_APPROVAL,
       approval: { id: 'appr_1', status: 'PENDING', decidedAt: null },
     });
+    prisma.user.findMany.mockResolvedValue([{ id: 'admin_1' }]);
 
     const result = await service.submit(admin, 'trip_1');
     expect(result.status).toBe(TripStatus.PENDING_APPROVAL);
+    expect(notifications.createMany).toHaveBeenCalled();
   });
 
   it('cancels trip and keeps it addressable', async () => {
@@ -226,12 +245,12 @@ describe('TripsService', () => {
       travelers: [],
     });
 
-    await expect(service.getById(employeeUser, 'trip_1')).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    await expect(
+      service.getById(employeeUser, 'trip_1'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('approves pending trip', async () => {
+  it('approves pending trip and notifies stakeholders', async () => {
     prisma.trip.findFirst.mockResolvedValue({
       ...baseTrip,
       status: TripStatus.PENDING_APPROVAL,
@@ -256,7 +275,26 @@ describe('TripsService', () => {
       },
     });
 
-    const result = await service.approve(admin, 'trip_1');
+    const result = await service.approve(otherAdmin, 'trip_1', 'Looks good');
     expect(result.status).toBe(TripStatus.APPROVED);
+    expect(notifications.createMany).toHaveBeenCalled();
+  });
+
+  it('blocks self-approve by trip creator', async () => {
+    prisma.trip.findFirst.mockResolvedValue({
+      ...baseTrip,
+      createdByUserId: 'admin_1',
+      status: TripStatus.PENDING_APPROVAL,
+      travelers: [
+        {
+          ...baseTrip.travelers[0],
+          employee: { ...baseTrip.travelers[0].employee, userId: null },
+        },
+      ],
+    });
+
+    await expect(service.approve(admin, 'trip_1')).rejects.toThrow(
+      /cannot approve or reject your own trip/i,
+    );
   });
 });

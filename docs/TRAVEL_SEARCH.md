@@ -13,7 +13,7 @@ Flight and hotel search via **SerpAPI** (`google_flights` / `google_hotels`).
 | Cache | In-memory TTL (~60s) for identical searches |
 | Rate limit | ~30 requests / minute / user |
 | Attach | One selected flight + one selected hotel per trip (`selected=true`) |
-| Editable statuses | Attach allowed in `DRAFT`, `PENDING_APPROVAL`, `REJECTED` |
+| Editable statuses | Attach / field edits allowed in `DRAFT` and `REJECTED` only (locked while `PENDING_APPROVAL` — M10) |
 | Provider enum | `OfferProvider.SERPAPI` (enum also retains unused legacy `AMADEUS`) |
 
 ## Environment

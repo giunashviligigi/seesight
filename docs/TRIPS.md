@@ -36,7 +36,7 @@ Invalid transitions return **400** with message `Invalid status transition from 
 |-------|--------|
 | Create | Always starts as `DRAFT`. Requires ≥1 traveler (`TripTraveler`). |
 | Group travel | Multiple employees; duplicate traveler ids rejected; primary auto-assigned if omitted. |
-| Edit lock | Editable in `DRAFT`, `PENDING_APPROVAL`, `REJECTED`. Locked from `APPROVED` onward. |
+| Edit lock | Editable in `DRAFT` and `REJECTED` only (locked while pending — M10). |
 | Cancel | Soft status only — row kept (`deletedAt` unused for cancel). Visible in list filters. |
 | Submit | Creates/updates `Approval` (`PENDING`) + `ApprovalAction.SUBMIT`. |
 | Employee scope | List/detail limited to trips they created or travel on; must include self when creating. |

@@ -20,6 +20,7 @@ import type { RequestUser } from '../auth/types/auth.types';
 import {
   CreateTripDto,
   ListTripsQueryDto,
+  ApproveTripDto,
   RejectTripDto,
   UpdateTripDto,
 } from './dto/trip.dto';
@@ -114,19 +115,22 @@ export class TripsController {
   @Post(':id/approve')
   @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiOperation({
-    summary: 'Approve pending trip (M10 workflow hook)',
+    summary: 'Approve pending trip (self-approve forbidden)',
   })
   @ApiOkResponse({ type: TripResponseDto })
   approve(
     @CurrentUser() user: RequestUser,
     @Param('id') id: string,
+    @Body() dto: ApproveTripDto,
   ): Promise<TripResponseDto> {
-    return this.tripsService.approve(user, id);
+    return this.tripsService.approve(user, id, dto?.comment);
   }
 
   @Post(':id/reject')
   @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN)
-  @ApiOperation({ summary: 'Reject pending trip (M10 workflow hook)' })
+  @ApiOperation({
+    summary: 'Reject pending trip (self-approve forbidden)',
+  })
   @ApiOkResponse({ type: TripResponseDto })
   reject(
     @CurrentUser() user: RequestUser,

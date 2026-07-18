@@ -203,3 +203,11 @@ export class RejectTripDto {
   @MaxLength(1000)
   comment?: string;
 }
+
+export class ApproveTripDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  comment?: string;
+}
