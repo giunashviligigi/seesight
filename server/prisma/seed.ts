@@ -391,6 +391,66 @@ async function main() {
       },
     }));
 
+  const existingParis = await prisma.trip.findFirst({
+    where: {
+      companyId: company.id,
+      purpose: 'Sales kickoff in Paris',
+      deletedAt: null,
+    },
+  });
+
+  if (!existingParis) {
+    await prisma.trip.create({
+      data: {
+        companyId: company.id,
+        createdByUserId: companyAdmin.id,
+        purpose: 'Sales kickoff in Paris',
+        destinationCountry: 'FR',
+        destinationCity: 'Paris',
+        startDate: new Date('2026-10-05'),
+        endDate: new Date('2026-10-08'),
+        budgetAmount: 1200,
+        budgetCurrency: 'EUR',
+        notes: 'Seeded second trip for reports demos',
+        status: TripStatus.COMPLETED,
+        travelers: {
+          create: [
+            {
+              employeeId: employeeSales.id,
+              isPrimary: true,
+            },
+          ],
+        },
+        flightOfferSnapshots: {
+          create: {
+            providerOfferId: 'seed-flight-2',
+            origin: 'TBS',
+            destination: 'CDG',
+            departAt: new Date('2026-10-05T05:00:00.000Z'),
+            returnAt: new Date('2026-10-08T20:00:00.000Z'),
+            priceAmount: 400,
+            currency: 'EUR',
+            selected: true,
+            rawPayload: { source: 'seed' },
+          },
+        },
+        hotelOfferSnapshots: {
+          create: {
+            providerOfferId: 'seed-hotel-2',
+            hotelName: 'Paris Canal Hotel',
+            city: 'Paris',
+            checkIn: new Date('2026-10-05'),
+            checkOut: new Date('2026-10-08'),
+            priceAmount: 300,
+            currency: 'EUR',
+            selected: true,
+            rawPayload: { source: 'seed' },
+          },
+        },
+      },
+    });
+  }
+
   await prisma.reportCache.upsert({
     where: {
       companyId_reportKey: {

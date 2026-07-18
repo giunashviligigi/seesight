@@ -99,6 +99,11 @@ export default function DashboardPage() {
               approvals
             </Link>
           ) : null}
+          {!isEmployee ? (
+            <Link href="/reports" className="text-sm text-ss-muted lowercase hover:text-ss-text">
+              reports
+            </Link>
+          ) : null}
           <Link href="/notifications" className="text-sm text-ss-muted lowercase hover:text-ss-text">
             notifications
           </Link>

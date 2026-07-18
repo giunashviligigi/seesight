@@ -45,7 +45,8 @@ server/src/
     ├── travel-search/    # SerpAPI Google Flights / Hotels (M8)
     ├── ai/               # Gemini itinerary recommendations (M9)
     ├── approvals/        # Pending queue + history (M10)
-    └── notifications/    # In-app notifications (M10)
+    ├── notifications/    # In-app notifications (M10)
+    └── reports/          # Travel analytics + CSV export (M11)
 ```
 
 Business modules follow Controller → Service → DTO conventions from `AGENTS.md`.
