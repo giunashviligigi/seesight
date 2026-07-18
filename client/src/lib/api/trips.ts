@@ -40,6 +40,30 @@ export type Trip = {
     status: "PENDING" | "APPROVED" | "REJECTED";
     decidedAt: string | null;
   } | null;
+  flightOffers: Array<{
+    id: string;
+    provider: string;
+    providerOfferId: string | null;
+    origin: string | null;
+    destination: string | null;
+    departAt: string | null;
+    returnAt: string | null;
+    priceAmount: number | null;
+    currency: string | null;
+    selected: boolean;
+  }>;
+  hotelOffers: Array<{
+    id: string;
+    provider: string;
+    providerOfferId: string | null;
+    hotelName: string | null;
+    city: string | null;
+    checkIn: string | null;
+    checkOut: string | null;
+    priceAmount: number | null;
+    currency: string | null;
+    selected: boolean;
+  }>;
   createdAt: string;
   updatedAt: string;
 };
@@ -180,6 +204,49 @@ export const tripsApi = {
   reopen(id: string, accessToken?: string | null) {
     return apiRequest<Trip>(`/trips/${id}/reopen`, {
       method: "POST",
+      accessToken: authToken(accessToken),
+    });
+  },
+
+  attachFlightOffer(
+    id: string,
+    input: {
+      providerOfferId: string;
+      origin: string;
+      destination: string;
+      departAt?: string | null;
+      returnAt?: string | null;
+      travelClass?: string | null;
+      priceAmount?: number | null;
+      currency?: string | null;
+      rawPayload: Record<string, unknown>;
+    },
+    accessToken?: string | null,
+  ) {
+    return apiRequest<Trip>(`/trips/${id}/offers/flight`, {
+      method: "POST",
+      body: input,
+      accessToken: authToken(accessToken),
+    });
+  },
+
+  attachHotelOffer(
+    id: string,
+    input: {
+      providerOfferId: string;
+      hotelName: string;
+      city?: string | null;
+      checkIn: string;
+      checkOut: string;
+      priceAmount?: number | null;
+      currency?: string | null;
+      rawPayload: Record<string, unknown>;
+    },
+    accessToken?: string | null,
+  ) {
+    return apiRequest<Trip>(`/trips/${id}/offers/hotel`, {
+      method: "POST",
+      body: input,
       accessToken: authToken(accessToken),
     });
   },

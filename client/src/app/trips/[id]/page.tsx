@@ -6,6 +6,8 @@ import { FormEvent, useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { authApi, AuthUser, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
 import { tripsApi, Trip } from "@/lib/api/trips";
+import { FlightOffer, HotelOffer } from "@/lib/api/travel";
+import { TripSearchWidget } from "@/components/travel/trip-search-widget";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -146,7 +148,7 @@ export default function TripDetailPage() {
   const token = getStoredAccessToken();
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-6 py-10">
+    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-10">
       <header className="flex items-center justify-between">
         <Link href="/" className="text-sm font-semibold tracking-[0.35em] text-ss-text uppercase">
           Seesight
@@ -293,6 +295,86 @@ export default function TripDetailPage() {
             ))}
           </ul>
         </div>
+
+        <div className="mt-8 grid gap-4 text-sm lowercase sm:grid-cols-2">
+          <div className="rounded-2xl border border-white/10 bg-ss-surface-strong p-4">
+            <p className="text-ss-muted">selected flight</p>
+            {trip.flightOffers?.find((o) => o.selected) ? (
+              <p className="mt-2 text-ss-text">
+                {trip.flightOffers.find((o) => o.selected)?.origin} →{" "}
+                {trip.flightOffers.find((o) => o.selected)?.destination}
+                {" · "}
+                {trip.flightOffers.find((o) => o.selected)?.priceAmount ?? "—"}{" "}
+                {trip.flightOffers.find((o) => o.selected)?.currency}
+              </p>
+            ) : (
+              <p className="mt-2 text-ss-muted">none selected</p>
+            )}
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-ss-surface-strong p-4">
+            <p className="text-ss-muted">selected hotel</p>
+            {trip.hotelOffers?.find((o) => o.selected) ? (
+              <p className="mt-2 text-ss-text">
+                {trip.hotelOffers.find((o) => o.selected)?.hotelName}
+                {" · "}
+                {trip.hotelOffers.find((o) => o.selected)?.priceAmount ?? "—"}{" "}
+                {trip.hotelOffers.find((o) => o.selected)?.currency}
+              </p>
+            ) : (
+              <p className="mt-2 text-ss-muted">none selected</p>
+            )}
+          </div>
+        </div>
+
+        {canEdit && token ? (
+          <div className="mt-10 border-t border-white/10 pt-8">
+            <TripSearchWidget
+              accessToken={token}
+              defaultOrigin=""
+              defaultDestination=""
+              defaultCity={trip.destinationCity ?? ""}
+              defaultDepart={trip.startDate}
+              defaultReturn={trip.endDate}
+              currency={trip.budgetCurrency}
+              disabled={busy}
+              onSelectFlight={async (offer: FlightOffer) => {
+                const next = await tripsApi.attachFlightOffer(
+                  trip.id,
+                  {
+                    providerOfferId: offer.providerOfferId,
+                    origin: offer.origin,
+                    destination: offer.destination,
+                    departAt: offer.departAt,
+                    returnAt: offer.returnAt,
+                    travelClass: offer.travelClass,
+                    priceAmount: offer.priceAmount,
+                    currency: offer.currency,
+                    rawPayload: offer.rawPayload,
+                  },
+                  token,
+                );
+                applyTrip(next);
+              }}
+              onSelectHotel={async (offer: HotelOffer) => {
+                const next = await tripsApi.attachHotelOffer(
+                  trip.id,
+                  {
+                    providerOfferId: offer.providerOfferId,
+                    hotelName: offer.hotelName,
+                    city: offer.city,
+                    checkIn: offer.checkIn,
+                    checkOut: offer.checkOut,
+                    priceAmount: offer.priceAmount,
+                    currency: offer.currency,
+                    rawPayload: offer.rawPayload,
+                  },
+                  token,
+                );
+                applyTrip(next);
+              }}
+            />
+          </div>
+        ) : null}
 
         {canEdit ? (
           <form className="mt-8 space-y-5" onSubmit={onSave}>

@@ -24,6 +24,10 @@ import {
   UpdateTripDto,
 } from './dto/trip.dto';
 import {
+  AttachFlightOfferDto,
+  AttachHotelOfferDto,
+} from './dto/attach-offer.dto';
+import {
   TripListResponseDto,
   TripResponseDto,
 } from './dto/trip-response.dto';
@@ -163,5 +167,33 @@ export class TripsController {
     @Param('id') id: string,
   ): Promise<TripResponseDto> {
     return this.tripsService.reopen(user, id);
+  }
+
+  @Post(':id/offers/flight')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.EMPLOYEE)
+  @ApiOperation({
+    summary: 'Attach a selected flight offer snapshot to a trip',
+  })
+  @ApiOkResponse({ type: TripResponseDto })
+  attachFlight(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+    @Body() dto: AttachFlightOfferDto,
+  ): Promise<TripResponseDto> {
+    return this.tripsService.attachFlightOffer(user, id, dto);
+  }
+
+  @Post(':id/offers/hotel')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.EMPLOYEE)
+  @ApiOperation({
+    summary: 'Attach a selected hotel offer snapshot to a trip',
+  })
+  @ApiOkResponse({ type: TripResponseDto })
+  attachHotel(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+    @Body() dto: AttachHotelOfferDto,
+  ): Promise<TripResponseDto> {
+    return this.tripsService.attachHotelOffer(user, id, dto);
   }
 }

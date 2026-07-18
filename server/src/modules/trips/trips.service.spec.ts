@@ -85,6 +85,8 @@ describe('TripsService', () => {
       },
     ],
     approval: null,
+    flightOfferSnapshots: [],
+    hotelOfferSnapshots: [],
   };
 
   beforeEach(async () => {

@@ -7,7 +7,9 @@ import {
 import {
   ApprovalActionType,
   ApprovalStatus,
+  OfferProvider,
   Prisma,
+  TravelClass,
   TripStatus,
   UserRole,
 } from '@prisma/client';
@@ -18,6 +20,10 @@ import {
   resolveTenantCompanyId,
 } from '../../common/tenant/tenant.utils';
 import { RequestUser } from '../auth/types/auth.types';
+import {
+  AttachFlightOfferDto,
+  AttachHotelOfferDto,
+} from './dto/attach-offer.dto';
 import {
   CreateTripDto,
   ListTripsQueryDto,
@@ -54,6 +60,8 @@ type TripRecord = Prisma.TripGetPayload<{
       };
     };
     approval: true;
+    flightOfferSnapshots: true;
+    hotelOfferSnapshots: true;
   };
 }>;
 
@@ -374,6 +382,111 @@ export class TripsService {
     return this.toResponse(updated);
   }
 
+  async attachFlightOffer(
+    actor: RequestUser,
+    id: string,
+    dto: AttachFlightOfferDto,
+  ): Promise<TripResponseDto> {
+    const trip = await this.findAccessibleTrip(actor, id);
+    this.assertCanMutateTrip(actor, trip);
+    if (!EDITABLE_STATUSES.includes(trip.status)) {
+      throw new BadRequestException(
+        `Offers cannot be attached while status is ${trip.status}`,
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.flightOfferSnapshot.updateMany({
+        where: { tripId: trip.id, selected: true },
+        data: { selected: false },
+      });
+
+      await tx.flightOfferSnapshot.create({
+        data: {
+          tripId: trip.id,
+          provider: OfferProvider.SERPAPI,
+          providerOfferId: dto.providerOfferId,
+          origin: dto.origin.toUpperCase(),
+          destination: dto.destination.toUpperCase(),
+          departAt: dto.departAt ? new Date(dto.departAt) : null,
+          returnAt: dto.returnAt ? new Date(dto.returnAt) : null,
+          travelClass: this.mapTravelClass(dto.travelClass),
+          priceAmount:
+            dto.priceAmount === undefined || dto.priceAmount === null
+              ? null
+              : dto.priceAmount,
+          currency: dto.currency?.toUpperCase() || trip.budgetCurrency,
+          rawPayload: dto.rawPayload as Prisma.InputJsonValue,
+          selected: true,
+        },
+      });
+    });
+
+    const updated = await this.findAccessibleTrip(actor, id);
+    return this.toResponse(updated);
+  }
+
+  async attachHotelOffer(
+    actor: RequestUser,
+    id: string,
+    dto: AttachHotelOfferDto,
+  ): Promise<TripResponseDto> {
+    const trip = await this.findAccessibleTrip(actor, id);
+    this.assertCanMutateTrip(actor, trip);
+    if (!EDITABLE_STATUSES.includes(trip.status)) {
+      throw new BadRequestException(
+        `Offers cannot be attached while status is ${trip.status}`,
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.hotelOfferSnapshot.updateMany({
+        where: { tripId: trip.id, selected: true },
+        data: { selected: false },
+      });
+
+      await tx.hotelOfferSnapshot.create({
+        data: {
+          tripId: trip.id,
+          provider: OfferProvider.SERPAPI,
+          providerOfferId: dto.providerOfferId,
+          hotelName: dto.hotelName.trim(),
+          city: dto.city?.trim() || null,
+          checkIn: startOfUtcDay(new Date(dto.checkIn)),
+          checkOut: startOfUtcDay(new Date(dto.checkOut)),
+          priceAmount:
+            dto.priceAmount === undefined || dto.priceAmount === null
+              ? null
+              : dto.priceAmount,
+          currency: dto.currency?.toUpperCase() || trip.budgetCurrency,
+          rawPayload: dto.rawPayload as Prisma.InputJsonValue,
+          selected: true,
+        },
+      });
+    });
+
+    const updated = await this.findAccessibleTrip(actor, id);
+    return this.toResponse(updated);
+  }
+
+  private mapTravelClass(value?: string | null): TravelClass | null {
+    if (!value) {
+      return null;
+    }
+    const normalized = value.toUpperCase().replace(/[\s-]+/g, '_');
+    if (normalized === 'PREMIUMECONOMY' || normalized === 'PREMIUM_ECONOMY') {
+      return TravelClass.PREMIUM_ECONOMY;
+    }
+    if (
+      normalized === 'ECONOMY' ||
+      normalized === 'BUSINESS' ||
+      normalized === 'FIRST'
+    ) {
+      return normalized as TravelClass;
+    }
+    return null;
+  }
+
   private async transitionWithApproval(
     actor: RequestUser,
     id: string,
@@ -657,6 +770,36 @@ export class TripsService {
               : null,
           }
         : null,
+      flightOffers: (trip.flightOfferSnapshots ?? []).map((offer) => ({
+        id: offer.id,
+        provider: offer.provider,
+        providerOfferId: offer.providerOfferId,
+        origin: offer.origin,
+        destination: offer.destination,
+        departAt: offer.departAt ? offer.departAt.toISOString() : null,
+        returnAt: offer.returnAt ? offer.returnAt.toISOString() : null,
+        priceAmount:
+          offer.priceAmount === null || offer.priceAmount === undefined
+            ? null
+            : Number(offer.priceAmount),
+        currency: offer.currency,
+        selected: offer.selected,
+      })),
+      hotelOffers: (trip.hotelOfferSnapshots ?? []).map((offer) => ({
+        id: offer.id,
+        provider: offer.provider,
+        providerOfferId: offer.providerOfferId,
+        hotelName: offer.hotelName,
+        city: offer.city,
+        checkIn: offer.checkIn ? toDateString(offer.checkIn) : null,
+        checkOut: offer.checkOut ? toDateString(offer.checkOut) : null,
+        priceAmount:
+          offer.priceAmount === null || offer.priceAmount === undefined
+            ? null
+            : Number(offer.priceAmount),
+        currency: offer.currency,
+        selected: offer.selected,
+      })),
       createdAt: trip.createdAt.toISOString(),
       updatedAt: trip.updatedAt.toISOString(),
     };
@@ -672,6 +815,12 @@ const tripInclude = {
     },
   },
   approval: true,
+  flightOfferSnapshots: {
+    orderBy: { createdAt: 'desc' as const },
+  },
+  hotelOfferSnapshots: {
+    orderBy: { createdAt: 'desc' as const },
+  },
 } satisfies Prisma.TripInclude;
 
 const ALLOWED_TRANSITIONS: Record<TripStatus, TripStatus[]> = {

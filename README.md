@@ -529,22 +529,22 @@ Every completed feature must:
 
 ---
 
-### Milestone 8 — Travel Search (Amadeus)
+### Milestone 8 — Travel Search (SerpAPI)
 
 **Goal:** Real flight and hotel search integrated into trip planning — wired to the Figma search widget UX.
 
 **Scope**
 
-1. Amadeus auth + client wrapper in NestJS (`TravelSearchModule`).
+1. SerpAPI client wrapper in NestJS (`TravelSearchModule`) — Google Flights + Google Hotels (replaces Amadeus).
 2. Endpoints:
    - `GET /travel/flights` (origin, destination, dates, adults, cabin class)
-   - `GET /travel/hotels` (city/geo, check-in/out, guests)
-3. Normalize Amadeus responses into internal DTOs (never leak raw vendor shape to frontend).
+   - `GET /travel/hotels` (city, check-in/out, guests)
+3. Normalize SerpAPI responses into internal DTOs (never leak raw vendor shape to frontend).
 4. Rate limiting, caching strategy for identical searches (short TTL), error mapping for vendor downtime.
 5. Attach selected offers to a trip (store snapshot JSON + price + currency + provider refs).
 6. Frontend: implement Figma `TripSearchWidget` (empty + filled states) calling these APIs.
-7. `.env` keys documented; sandbox credentials for thesis demos.
-8. Integration tests with mocked Amadeus client (no flaky live calls in CI).
+7. `.env` keys documented; SerpAPI credentials for thesis demos.
+8. Integration tests with mocked SerpAPI client (no flaky live calls in CI).
 
 **Deliverables**
 
@@ -553,12 +553,12 @@ Every completed feature must:
 
 **Acceptance criteria**
 
-- Search works against Amadeus sandbox with valid params
+- Search works against SerpAPI with valid params
 - Vendor failures surface as controlled API errors
 - Attached offers survive trip reload
 - Empty/filled search states match Figma frames
 
-**Deps / risks:** Amadeus sandbox quotas; Google Maps optional for city autocomplete if time allows
+**Deps / risks:** SerpAPI quotas; Google Maps optional for city autocomplete if time allows
 
 ---
 
@@ -697,7 +697,7 @@ M1 Setup (+ design tokens)
            │    └── M5 Employee Management
            │         ├── M6 Dashboard
            │         └── M7 Trip Management
-           │              ├── M8 Travel Search (Amadeus + Figma search UI)
+           │              ├── M8 Travel Search (SerpAPI + Figma search UI)
            │              │    └── M9 AI Recommendations
            │              ├── M10 Approval Workflow
            │              └── M11 Reports
@@ -736,8 +736,8 @@ You are the **lead software engineer** of this project.
 | Field | Value |
 |-------|--------|
 | Project stage | In development |
-| Current milestone | Milestone 7 — Trip Management **complete** |
-| Next milestone | Milestone 8 — Travel Search |
+| Current milestone | Milestone 8 — Travel Search **complete** |
+| Next milestone | Milestone 9 — AI Recommendations |
 | Version | v0.1.0 |
 | Design | Figma Landing + Pitch Deck locked as UI source of truth |
 | Active branch | `development` |

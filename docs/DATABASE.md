@@ -58,7 +58,7 @@ erDiagram
 | `ApprovalStatus` | `PENDING`, `APPROVED`, `REJECTED` |
 | `ApprovalActionType` | `SUBMIT`, `APPROVE`, `REJECT`, `COMMENT` |
 | `TravelClass` | `ECONOMY`, `PREMIUM_ECONOMY`, `BUSINESS`, `FIRST` |
-| `OfferProvider` | `AMADEUS`, `MANUAL`, `OTHER` |
+| `OfferProvider` | `AMADEUS`, `SERPAPI`, `MANUAL`, `OTHER` |
 
 ## Soft delete vs hard delete
 

@@ -59,6 +59,7 @@ enum TravelClass {
 
 enum OfferProvider {
   AMADEUS
+  SERPAPI
   MANUAL
   OTHER
 }
@@ -263,7 +264,7 @@ model FlightOfferSnapshot {
   id              String        @id @default(cuid())
   tripId          String
   trip            Trip          @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  provider        OfferProvider @default(AMADEUS)
+  provider        OfferProvider @default(SERPAPI)
   providerOfferId String?
   origin          String?
   destination     String?
@@ -285,7 +286,7 @@ model HotelOfferSnapshot {
   id              String        @id @default(cuid())
   tripId          String
   trip            Trip          @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  provider        OfferProvider @default(AMADEUS)
+  provider        OfferProvider @default(SERPAPI)
   providerOfferId String?
   hotelName       String?
   city            String?

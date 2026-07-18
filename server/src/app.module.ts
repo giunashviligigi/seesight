@@ -11,6 +11,7 @@ import { DepartmentsModule } from './modules/departments/departments.module';
 import { EmployeesModule } from './modules/employees/employees.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { TripsModule } from './modules/trips/trips.module';
+import { TravelSearchModule } from './modules/travel-search/travel-search.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
 
@@ -29,6 +30,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     EmployeesModule,
     DashboardModule,
     TripsModule,
+    TravelSearchModule,
   ],
   providers: [
     {

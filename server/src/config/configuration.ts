@@ -13,4 +13,13 @@ export default () => ({
   app: {
     webOrigin: process.env.WEB_ORIGIN ?? 'http://localhost:3000',
   },
+  serpapi: {
+    apiKey: process.env.SERPAPI_API_KEY ?? '',
+    baseUrl: process.env.SERPAPI_BASE_URL ?? 'https://serpapi.com/search.json',
+    cacheTtlMs: parseInt(process.env.SERPAPI_CACHE_TTL_MS ?? '60000', 10),
+    rateLimitPerMinute: parseInt(
+      process.env.SERPAPI_RATE_LIMIT_PER_MINUTE ?? '30',
+      10,
+    ),
+  },
 });
