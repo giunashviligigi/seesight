@@ -1,0 +1,66 @@
+{
+  "description": "Golden demo prompt fixture for Milestone 9 thesis demos",
+  "systemInstruction": "You are SeeSight's business travel assistant. Recommend the best flight and hotel combination from the provided shortlist only. Return JSON only.",
+  "exampleUserPayload": {
+    "trip": {
+      "purpose": "Client kickoff",
+      "destinationCity": "Berlin",
+      "destinationCountry": "DE",
+      "startDate": "2026-09-10",
+      "endDate": "2026-09-14",
+      "budgetAmount": 1500,
+      "budgetCurrency": "EUR",
+      "travelerCount": 1,
+      "policyStub": { "maxHotelStars": 4 }
+    },
+    "flights": [
+      {
+        "id": "flight-1",
+        "origin": "TBS",
+        "destination": "BER",
+        "airline": "Lufthansa",
+        "stops": 0,
+        "totalDurationMinutes": 220,
+        "priceAmount": 420,
+        "currency": "EUR"
+      },
+      {
+        "id": "flight-2",
+        "origin": "TBS",
+        "destination": "BER",
+        "airline": "Turkish Airlines",
+        "stops": 1,
+        "totalDurationMinutes": 360,
+        "priceAmount": 360,
+        "currency": "EUR"
+      }
+    ],
+    "hotels": [
+      {
+        "id": "hotel-1",
+        "hotelName": "Berlin Central Inn",
+        "city": "Berlin",
+        "stars": 4,
+        "priceAmount": 480,
+        "currency": "EUR"
+      }
+    ]
+  },
+  "exampleModelOutput": {
+    "recommendedFlightId": "flight-2",
+    "recommendedHotelId": "hotel-1",
+    "estimatedTotal": 840,
+    "currency": "EUR",
+    "reasoning": "flight-2 is the cheapest acceptable itinerary within budget; hotel-1 is the only shortlisted stay near the meeting district.",
+    "tradeoffs": "flight-1 is faster (nonstop) but costs 60 EUR more than flight-2.",
+    "alternatives": [
+      {
+        "flightOfferId": "flight-1",
+        "hotelOfferId": "hotel-1",
+        "label": "shortest flight",
+        "estimatedTotal": 900,
+        "rationale": "Pay more for a nonstop if schedule risk matters more than cost."
+      }
+    ]
+  }
+}

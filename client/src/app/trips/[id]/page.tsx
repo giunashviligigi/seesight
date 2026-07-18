@@ -8,6 +8,7 @@ import { authApi, AuthUser, getStoredAccessToken, storeAccessToken } from "@/lib
 import { tripsApi, Trip } from "@/lib/api/trips";
 import { FlightOffer, HotelOffer } from "@/lib/api/travel";
 import { TripSearchWidget } from "@/components/travel/trip-search-widget";
+import { AskAiPanel } from "@/components/travel/ask-ai-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -374,6 +375,18 @@ export default function TripDetailPage() {
               }}
             />
           </div>
+        ) : null}
+
+        {token ? (
+          <AskAiPanel
+            tripId={trip.id}
+            accessToken={token}
+            hasOffers={
+              (trip.flightOffers?.length ?? 0) > 0 ||
+              (trip.hotelOffers?.length ?? 0) > 0
+            }
+            disabled={busy}
+          />
         ) : null}
 
         {canEdit ? (

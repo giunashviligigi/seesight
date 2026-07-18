@@ -11,7 +11,7 @@ SeeSight Business is a monorepo with a separated Next.js client and NestJS API, 
                                          │
                           ┌──────────────┼──────────────┐
                           ▼              ▼              ▼
-                     SerpAPI (M8)   OpenAI/Gemini   Google Maps
+                     SerpAPI (M8)   Gemini (M9)   Google Maps
                                       (M9)            (opt.)
 ```
 

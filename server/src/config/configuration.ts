@@ -22,4 +22,19 @@ export default () => ({
       10,
     ),
   },
+  ai: {
+    provider: (process.env.AI_PROVIDER ?? 'gemini').toLowerCase(),
+    geminiApiKey: process.env.GEMINI_API_KEY ?? '',
+    geminiModel: process.env.GEMINI_MODEL ?? 'gemini-2.0-flash',
+    geminiBaseUrl:
+      process.env.GEMINI_BASE_URL ??
+      'https://generativelanguage.googleapis.com/v1beta',
+    maxOutputTokens: parseInt(process.env.AI_MAX_OUTPUT_TOKENS ?? '1024', 10),
+    maxOffersPerType: parseInt(process.env.AI_MAX_OFFERS_PER_TYPE ?? '8', 10),
+    rateLimitPerMinute: parseInt(
+      process.env.AI_RATE_LIMIT_PER_MINUTE ?? '10',
+      10,
+    ),
+    temperature: parseFloat(process.env.AI_TEMPERATURE ?? '0.2'),
+  },
 });
