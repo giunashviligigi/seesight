@@ -83,7 +83,7 @@ Companies use Booking.com, Skyscanner, Expedia, emails, Excel spreadsheets, and 
 
 ### Travel Search
 
-Powered by **Amadeus Flight API** and **Amadeus Hotel API**.
+Powered by **SerpAPI** (Google Flights + Google Hotels).
 
 | Now | Future |
 |-----|--------|
@@ -91,6 +91,8 @@ Powered by **Amadeus Flight API** and **Amadeus Hotel API**.
 | Hotels | Activities |
 
 ### AI Assistant
+
+Powered by **Google Gemini**, with a rule-based fallback if the LLM is unavailable.
 
 - Recommend cheapest / best-value itinerary
 - Compare alternatives
@@ -151,9 +153,9 @@ Employee notified
 
 | Service | Purpose |
 |---------|---------|
-| Amadeus | Flight & hotel search |
-| Google Maps | Location / maps context |
-| OpenAI / Gemini | AI itinerary recommendations |
+| SerpAPI | Flight & hotel search (Google Flights / Google Hotels) |
+| Google Gemini | AI itinerary recommendations |
+| Google Maps | Location / maps context (optional / future) |
 
 ### Deployment
 
@@ -535,7 +537,7 @@ Every completed feature must:
 
 **Scope**
 
-1. SerpAPI client wrapper in NestJS (`TravelSearchModule`) — Google Flights + Google Hotels (replaces Amadeus).
+1. SerpAPI client wrapper in NestJS (`TravelSearchModule`) — Google Flights + Google Hotels.
 2. Endpoints:
    - `GET /travel/flights` (origin, destination, dates, adults, cabin class)
    - `GET /travel/hotels` (city, check-in/out, guests)
@@ -568,7 +570,7 @@ Every completed feature must:
 
 **Scope**
 
-1. AI module integrating OpenAI and/or Gemini (provider abstraction so one can be swapped).
+1. AI module integrating **Gemini** via a provider abstraction (`AiProvider`) so another LLM can be swapped later without changing the API surface.
 2. Input: trip constraints + shortlisted flight/hotel offers (+ company policy stubs if present).
 3. Output: ranked recommendations with rationale, estimated cost, tradeoffs (cheapest vs shortest).
 4. Endpoint: `POST /ai/recommend-itinerary` with validation and max token/cost guards.
@@ -683,7 +685,7 @@ Every completed feature must:
 - Fresh deploy + migrate succeeds from clean VM instructions
 - Rollback steps verified once
 
-**Deps / risks:** Oracle Cloud quota, DNS propagation, Amadeus/LLM keys in prod vs sandbox
+**Deps / risks:** Oracle Cloud quota, DNS propagation, SerpAPI/Gemini keys in prod vs sandbox
 
 ---
 

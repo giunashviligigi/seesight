@@ -16,6 +16,11 @@ git checkout development
 cp server/.env.example server/.env
 cp client/.env.example client/.env.local
 
+# Required API keys in server/.env (not Amadeus / OpenAI):
+#   SERPAPI_API_KEY  — flight/hotel search (M8)
+#   GEMINI_API_KEY   — AI recommendations (M9)
+#   AI_PROVIDER=gemini
+
 cd server && npm install && npx prisma generate && cd ..
 cd client && npm install && cd ..
 ```

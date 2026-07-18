@@ -1,6 +1,6 @@
 # Travel Search (Milestone 8)
 
-Replaces Amadeus with **SerpAPI** for flight and hotel search.
+Flight and hotel search via **SerpAPI** (`google_flights` / `google_hotels`).
 
 ## Decisions
 
@@ -14,7 +14,7 @@ Replaces Amadeus with **SerpAPI** for flight and hotel search.
 | Rate limit | ~30 requests / minute / user |
 | Attach | One selected flight + one selected hotel per trip (`selected=true`) |
 | Editable statuses | Attach allowed in `DRAFT`, `PENDING_APPROVAL`, `REJECTED` |
-| Provider enum | `OfferProvider.SERPAPI` (legacy `AMADEUS` retained) |
+| Provider enum | `OfferProvider.SERPAPI` (enum also retains unused legacy `AMADEUS`) |
 
 ## Environment
 

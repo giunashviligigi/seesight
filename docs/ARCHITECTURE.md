@@ -11,8 +11,7 @@ SeeSight Business is a monorepo with a separated Next.js client and NestJS API, 
                                          │
                           ┌──────────────┼──────────────┐
                           ▼              ▼              ▼
-                     SerpAPI (M8)   Gemini (M9)   Google Maps
-                                      (M9)            (opt.)
+                     SerpAPI (M8)   Gemini (M9)   Google Maps (opt.)
 ```
 
 ## Repository layout
@@ -35,17 +34,29 @@ server/src/
 ├── common/prisma/
 ├── common/tenant/
 └── modules/
-    ├── health/       # GET /health
+    ├── health/           # GET /health
     ├── auth/
     ├── account/
     ├── companies/
     ├── departments/
     ├── employees/
-    ├── dashboard/    # GET /dashboard/summary (M6)
-    └── trips/        # Trip CRUD + status machine (M7)
+    ├── dashboard/        # GET /dashboard/summary (M6)
+    ├── trips/            # Trip CRUD + status machine + offer attach (M7/M8)
+    ├── travel-search/    # SerpAPI Google Flights / Hotels (M8)
+    └── ai/               # Gemini itinerary recommendations (M9)
 ```
 
 Business modules follow Controller → Service → DTO conventions from `AGENTS.md`.
+
+## External integrations
+
+| Provider | Used for |
+|----------|----------|
+| **SerpAPI** | Flight and hotel search |
+| **Google Gemini** | AI itinerary recommendations (rule-based fallback if unavailable) |
+| Google Maps | Optional / future location features |
+
+Amadeus and OpenAI are **not** used.
 
 ## Local ports
 

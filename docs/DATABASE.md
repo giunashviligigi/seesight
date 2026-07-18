@@ -58,7 +58,7 @@ erDiagram
 | `ApprovalStatus` | `PENDING`, `APPROVED`, `REJECTED` |
 | `ApprovalActionType` | `SUBMIT`, `APPROVE`, `REJECT`, `COMMENT` |
 | `TravelClass` | `ECONOMY`, `PREMIUM_ECONOMY`, `BUSINESS`, `FIRST` |
-| `OfferProvider` | `AMADEUS`, `SERPAPI`, `MANUAL`, `OTHER` |
+| `OfferProvider` | `SERPAPI` (active), `MANUAL`, `OTHER`; `AMADEUS` retained in enum only for legacy rows |
 
 ## Soft delete vs hard delete
 

@@ -7,8 +7,8 @@ Explainable itinerary recommendations using Gemini, with a rule-based fallback.
 | Topic | Choice |
 |-------|--------|
 | Primary provider | Google Gemini (`gemini-2.0-flash`) |
-| Abstraction | `AiProvider` interface; `GeminiProvider` is the default binding |
-| OpenAI | Not wired in M9 — swap via `AI_PROVIDER` / provider token later |
+| Abstraction | `AiProvider` interface; `GeminiProvider` is the active binding |
+| Other LLMs | Not used in production — abstraction allows a future swap without API changes |
 | Input | Trip constraints + shortlisted offers (request body) **or** attached trip snapshots |
 | Output | Structured JSON only (`RecommendationResultDto`) |
 | Persistence | `AiRecommendation` rows linked to `tripId` |
