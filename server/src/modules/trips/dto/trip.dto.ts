@@ -30,16 +30,22 @@ export class TripTravelerInputDto {
 }
 
 export class CreateTripDto {
-  @ApiProperty({ example: 'Client workshop in Berlin' })
-  @IsString()
-  @MinLength(1)
-  @MaxLength(200)
-  purpose!: string;
-
-  @ApiPropertyOptional({ example: 'DE' })
+  @ApiPropertyOptional({
+    example: 'Client workshop in Berlin',
+    description: 'Optional; empty for booking-first drafts until the user fills it',
+  })
   @IsOptional()
   @IsString()
-  @MaxLength(2)
+  @MaxLength(200)
+  purpose?: string;
+
+  @ApiPropertyOptional({
+    example: 'Germany',
+    description: 'Full country name or ISO 3166-1 alpha-2 code (stored as ISO).',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
   destinationCountry?: string;
 
   @ApiPropertyOptional({ example: 'Berlin' })
@@ -48,13 +54,23 @@ export class CreateTripDto {
   @MaxLength(120)
   destinationCity?: string;
 
-  @ApiProperty({ example: '2026-09-10' })
+  @ApiPropertyOptional({
+    example: '2026-09-10',
+    description:
+      'Optional for booking-first drafts; defaults to today when omitted',
+  })
+  @IsOptional()
   @IsDateString()
-  startDate!: string;
+  startDate?: string;
 
-  @ApiProperty({ example: '2026-09-14' })
+  @ApiPropertyOptional({
+    example: '2026-09-14',
+    description:
+      'Optional for booking-first drafts; defaults to startDate (or today) when omitted',
+  })
+  @IsOptional()
   @IsDateString()
-  endDate!: string;
+  endDate?: string;
 
   @ApiPropertyOptional({ example: 1800 })
   @IsOptional()
@@ -94,14 +110,18 @@ export class UpdateTripDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  @MinLength(1)
   @MaxLength(200)
   purpose?: string;
 
-  @ApiPropertyOptional({ nullable: true, type: String })
+  @ApiPropertyOptional({
+    nullable: true,
+    type: String,
+    example: 'Germany',
+    description: 'Full country name or ISO 3166-1 alpha-2 code (stored as ISO).',
+  })
   @IsOptional()
   @IsString()
-  @MaxLength(2)
+  @MaxLength(100)
   destinationCountry?: string | null;
 
   @ApiPropertyOptional({ nullable: true, type: String })

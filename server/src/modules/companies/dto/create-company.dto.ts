@@ -35,10 +35,13 @@ export class CreateCompanyDto {
   })
   slug?: string;
 
-  @ApiPropertyOptional({ example: 'GE' })
+  @ApiPropertyOptional({
+    example: 'Georgia',
+    description: 'Full country name or ISO 3166-1 alpha-2 code (stored as ISO).',
+  })
   @IsOptional()
   @IsString()
-  @MaxLength(2)
+  @MaxLength(100)
   country?: string;
 
   @ApiPropertyOptional({ example: 'billing@acme-travel.example' })
@@ -53,7 +56,7 @@ export class CreateCompanyDto {
   timezone?: string;
 
   @ApiPropertyOptional({
-    example: { defaultBudgetLimit: 2000, currency: 'EUR' },
+    example: { defaultBudgetLimit: 2000, defaultBudgetCurrency: 'EUR' },
   })
   @IsOptional()
   @IsObject()

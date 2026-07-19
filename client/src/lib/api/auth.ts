@@ -11,6 +11,7 @@ export type AuthUser = {
   role: UserRole;
   status: UserStatus;
   companyId: string | null;
+  mustChangePassword: boolean;
   createdAt: string;
 };
 
@@ -96,6 +97,14 @@ export const authApi = {
     return apiRequest<MessageResponse>("/auth/reset-password", {
       method: "POST",
       body: input,
+    });
+  },
+
+  changePassword(input: { currentPassword: string; newPassword: string }) {
+    return apiRequest<MessageResponse>("/auth/change-password", {
+      method: "POST",
+      body: input,
+      accessToken: getStoredAccessToken(),
     });
   },
 

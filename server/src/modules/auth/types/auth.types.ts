@@ -15,6 +15,7 @@ export type RequestUser = {
   companyId: string | null;
   firstName: string | null;
   lastName: string | null;
+  mustChangePassword: boolean;
   createdAt: Date;
 };
 
@@ -27,6 +28,7 @@ export function toUserResponse(user: User): UserResponseDto {
     role: user.role,
     status: user.status,
     companyId: user.companyId,
+    mustChangePassword: user.mustChangePassword,
     createdAt: user.createdAt,
   };
 }
@@ -40,6 +42,7 @@ export function toRequestUser(user: User): RequestUser {
     companyId: user.companyId,
     firstName: user.firstName,
     lastName: user.lastName,
+    mustChangePassword: user.mustChangePassword,
     createdAt: user.createdAt,
   };
 }

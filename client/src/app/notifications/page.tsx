@@ -4,12 +4,21 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
-import { authApi, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
+import { authApi, AuthUser, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
 import { AppNotification, notificationsApi } from "@/lib/api/notifications";
+import {
+  AppHeader,
+  NOTIFICATIONS_UPDATED_EVENT,
+} from "@/components/layout/app-header";
 import { Button } from "@/components/ui/button";
+
+function notifyUnreadChanged() {
+  window.dispatchEvent(new Event(NOTIFICATIONS_UPDATED_EVENT));
+}
 
 export default function NotificationsPage() {
   const router = useRouter();
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [items, setItems] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -19,6 +28,7 @@ export default function NotificationsPage() {
     const result = await notificationsApi.list({ page: 1, pageSize: 50 }, token);
     setItems(result.items);
     setUnreadCount(result.unreadCount);
+    notifyUnreadChanged();
   }
 
   useEffect(() => {
@@ -31,6 +41,7 @@ export default function NotificationsPage() {
     void (async () => {
       try {
         const me = await authApi.me(token);
+        setUser(me);
         if (me.role === "SUPER_ADMIN") {
           router.replace("/companies");
           return;
@@ -72,7 +83,7 @@ export default function NotificationsPage() {
     }
   }
 
-  if (loading) {
+  if (loading || !user) {
     return (
       <main className="flex min-h-screen items-center justify-center px-6">
         <p className="text-ss-muted lowercase">loading notifications...</p>
@@ -82,22 +93,7 @@ export default function NotificationsPage() {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-6 py-10">
-      <header className="flex items-center justify-between">
-        <Link href="/" className="text-sm font-semibold tracking-[0.35em] text-ss-text uppercase">
-          Seesight
-        </Link>
-        <nav className="flex gap-3">
-          <Link href="/dashboard" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            dashboard
-          </Link>
-          <Link href="/trips" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            trips
-          </Link>
-          <Link href="/account" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            account
-          </Link>
-        </nav>
-      </header>
+      <AppHeader user={user} unreadCount={unreadCount} />
 
       <section className="mt-12 rounded-3xl border border-white/15 bg-ss-surface p-8">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">

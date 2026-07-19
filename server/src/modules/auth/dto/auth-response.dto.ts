@@ -23,6 +23,12 @@ export class UserResponseDto {
   @ApiPropertyOptional()
   companyId!: string | null;
 
+  @ApiProperty({
+    description:
+      'When true, the user must set a new password before using the app (temporary first login).',
+  })
+  mustChangePassword!: boolean;
+
   @ApiProperty()
   createdAt!: Date;
 }

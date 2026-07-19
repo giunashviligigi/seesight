@@ -1,13 +1,26 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ApiError } from "@/lib/api/client";
+import { aiApi, RecommendItineraryResponse } from "@/lib/api/ai";
 import { travelApi, FlightOffer, HotelOffer } from "@/lib/api/travel";
+import { AirportCombobox } from "@/components/travel/airport-combobox";
 import { Button } from "@/components/ui/button";
+import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { findAirportByIata, GEORGIA_ORIGIN_AIRPORTS } from "@/lib/airports";
+import {
+  formatDuration,
+  formatFlightClock,
+  formatFlightDateTime,
+} from "@/lib/format-travel";
+import { parseTravelPrompt } from "@/lib/parse-travel-prompt";
+
+const PAGE_SIZE = 3;
 
 type TripSearchWidgetProps = {
+  tripId: string;
   accessToken: string;
   defaultOrigin?: string;
   defaultDestination?: string;
@@ -17,10 +30,41 @@ type TripSearchWidgetProps = {
   currency?: string;
   onSelectFlight: (offer: FlightOffer) => Promise<void>;
   onSelectHotel: (offer: HotelOffer) => Promise<void>;
+  onCriteriaChange?: (criteria: {
+    origin: string;
+    destination: string;
+    destinationCity: string;
+    destinationCountry: string | null;
+    depart: string;
+    returnDate: string;
+    tripType: "one_way" | "round_trip";
+  }) => Promise<void> | void;
   disabled?: boolean;
 };
 
+function sortByPrice<T extends { priceAmount: number | null }>(items: T[]): T[] {
+  return [...items].sort((a, b) => {
+    const pa = a.priceAmount ?? Number.POSITIVE_INFINITY;
+    const pb = b.priceAmount ?? Number.POSITIVE_INFINITY;
+    return pa - pb;
+  });
+}
+
+function cheapestId(
+  items: Array<{ id: string; priceAmount: number | null }>,
+): string | null {
+  const sorted = sortByPrice(items);
+  return sorted[0]?.priceAmount != null ? sorted[0].id : null;
+}
+
+function hotelImages(offer: HotelOffer): string[] {
+  if (offer.images?.length) return offer.images;
+  if (offer.thumbnail) return [offer.thumbnail];
+  return [];
+}
+
 export function TripSearchWidget({
+  tripId,
   accessToken,
   defaultOrigin = "",
   defaultDestination = "",
@@ -30,63 +74,186 @@ export function TripSearchWidget({
   currency = "EUR",
   onSelectFlight,
   onSelectHotel,
+  onCriteriaChange,
   disabled = false,
 }: TripSearchWidgetProps) {
-  const [origin, setOrigin] = useState(defaultOrigin);
-  const [destination, setDestination] = useState(defaultDestination);
+  const [origin, setOrigin] = useState(defaultOrigin.toUpperCase());
+  const [destination, setDestination] = useState(
+    defaultDestination.toUpperCase(),
+  );
   const [city, setCity] = useState(defaultCity);
   const [depart, setDepart] = useState(defaultDepart);
   const [ret, setRet] = useState(defaultReturn);
+  const [tripType, setTripType] = useState<"one_way" | "round_trip">(
+    defaultReturn ? "round_trip" : "one_way",
+  );
   const [adults, setAdults] = useState("1");
+  const [nlPrompt, setNlPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
+  const [askingAi, setAskingAi] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
   const [attachingId, setAttachingId] = useState<string | null>(null);
   const [flights, setFlights] = useState<FlightOffer[]>([]);
   const [hotels, setHotels] = useState<HotelOffer[]>([]);
+  const [flightVisible, setFlightVisible] = useState(PAGE_SIZE);
+  const [hotelVisible, setHotelVisible] = useState(PAGE_SIZE);
   const [hasSearched, setHasSearched] = useState(false);
+  const [aiResult, setAiResult] = useState<RecommendItineraryResponse | null>(
+    null,
+  );
+  const [hotelDetail, setHotelDetail] = useState<HotelOffer | null>(null);
+  const [hotelPhotoIndex, setHotelPhotoIndex] = useState(0);
 
-  const filled =
-    origin.trim().length >= 3 &&
-    destination.trim().length >= 3 &&
-    depart.length > 0;
+  const originLabel = findAirportByIata(origin);
+  const destinationLabel = findAirportByIata(destination);
+  const cheapestFlightId = useMemo(() => cheapestId(flights), [flights]);
+  const cheapestHotelId = useMemo(() => cheapestId(hotels), [hotels]);
+  const visibleFlights = flights.slice(0, flightVisible);
+  const visibleHotels = hotels.slice(0, hotelVisible);
+
+  useEffect(() => {
+    if (!hotelDetail) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setHotelDetail(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [hotelDetail]);
+
+  async function runMarketSearch(params: {
+    origin: string;
+    destination: string;
+    depart: string;
+    ret: string;
+    city: string;
+    adults: number;
+    tripType: "one_way" | "round_trip";
+  }) {
+    const hotelCity =
+      params.city.trim() ||
+      findAirportByIata(params.destination)?.city ||
+      params.destination;
+    const returnDate =
+      params.tripType === "round_trip" && params.ret
+        ? params.ret
+        : undefined;
+    const hotelCheckOut = returnDate || params.depart;
+    const [flightResult, hotelResult] = await Promise.all([
+      travelApi.searchFlights(
+        {
+          origin: params.origin,
+          destination: params.destination,
+          departureDate: params.depart,
+          returnDate,
+          adults: params.adults,
+          currency,
+        },
+        accessToken,
+      ),
+      travelApi.searchHotels(
+        {
+          city: hotelCity,
+          checkIn: params.depart,
+          checkOut: hotelCheckOut,
+          adults: params.adults,
+          currency,
+        },
+        accessToken,
+      ),
+    ]);
+    const nextFlights = sortByPrice(flightResult.items);
+    const nextHotels = sortByPrice(hotelResult.items);
+    setFlights(nextFlights);
+    setHotels(nextHotels);
+    setFlightVisible(PAGE_SIZE);
+    setHotelVisible(PAGE_SIZE);
+    setHasSearched(true);
+
+    if (onCriteriaChange) {
+      const destAirport = findAirportByIata(params.destination);
+      await onCriteriaChange({
+        origin: params.origin,
+        destination: params.destination,
+        destinationCity:
+          params.city.trim() || destAirport?.city || params.destination,
+        destinationCountry: destAirport?.country ?? null,
+        depart: params.depart,
+        returnDate: returnDate ?? "",
+        tripType: params.tripType,
+      });
+    }
+
+    return { nextFlights, nextHotels, flightResult, hotelResult };
+  }
+
+  async function requestAiRecommendation(
+    nextFlights: FlightOffer[],
+    nextHotels: HotelOffer[],
+  ) {
+    if (nextFlights.length === 0 && nextHotels.length === 0) {
+      throw new Error("No offers to rank");
+    }
+    const result = await aiApi.recommendItinerary(
+      {
+        tripId,
+        flights: nextFlights.slice(0, 8).map((f) => ({
+          id: f.id,
+          origin: f.origin,
+          destination: f.destination,
+          airline: f.airline ?? undefined,
+          stops: f.stops,
+          totalDurationMinutes: f.totalDurationMinutes ?? undefined,
+          priceAmount: f.priceAmount,
+          currency: f.currency ?? currency,
+          summary: f.summary,
+        })),
+        hotels: nextHotels.slice(0, 8).map((h) => ({
+          id: h.id,
+          hotelName: h.hotelName,
+          city: h.city ?? undefined,
+          stars: h.stars ?? undefined,
+          priceAmount: h.priceAmount,
+          currency: h.currency ?? currency,
+          summary: h.summary,
+        })),
+      },
+      accessToken,
+    );
+    setAiResult(result);
+    return result;
+  }
 
   async function onSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (disabled) return;
+    if (origin.length !== 3 || destination.length !== 3) {
+      setError("pick a city/airport from the list for from and to");
+      return;
+    }
+    if (tripType === "round_trip" && !ret) {
+      setError("pick a return date for round trip, or switch to one way");
+      return;
+    }
     setSearching(true);
     setError(null);
     setMessage(null);
+    setAiResult(null);
     try {
       const adultsCount = Math.max(1, Number(adults) || 1);
-      const [flightResult, hotelResult] = await Promise.all([
-        travelApi.searchFlights(
-          {
-            origin: origin.trim(),
-            destination: destination.trim(),
-            departureDate: depart,
-            returnDate: ret || undefined,
-            adults: adultsCount,
-            currency,
-          },
-          accessToken,
-        ),
-        travelApi.searchHotels(
-          {
-            city: city.trim() || destination.trim(),
-            checkIn: depart,
-            checkOut: ret || depart,
-            adults: adultsCount,
-            currency,
-          },
-          accessToken,
-        ),
-      ]);
-      setFlights(flightResult.items);
-      setHotels(hotelResult.items);
-      setHasSearched(true);
+      const { nextFlights, nextHotels, flightResult, hotelResult } =
+        await runMarketSearch({
+          origin,
+          destination,
+          depart,
+          ret,
+          city,
+          adults: adultsCount,
+          tripType,
+        });
       setMessage(
-        `found ${flightResult.items.length} flights and ${hotelResult.items.length} hotels` +
+        `found ${nextFlights.length} flights (${tripType === "round_trip" ? "round trip" : "one way"}) and ${nextHotels.length} hotels · showing top ${PAGE_SIZE}` +
           (flightResult.cached || hotelResult.cached ? " (cached)" : ""),
       );
     } catch (err) {
@@ -96,12 +263,130 @@ export function TripSearchWidget({
     }
   }
 
+  async function onSuggestFromPrompt() {
+    if (disabled || suggesting) return;
+    const text = nlPrompt.trim();
+    if (text.length < 8) {
+      setError(
+        'describe your trip, e.g. "from 1 august to 6 august from tbilisi to berlin"',
+      );
+      return;
+    }
+
+    setSuggesting(true);
+    setError(null);
+    setMessage(null);
+    setAiResult(null);
+
+    try {
+      let parsed = parseTravelPrompt(text);
+      try {
+        const remote = await aiApi.parseTravelIntent(
+          {
+            prompt: text,
+            referenceDate: new Date().toISOString().slice(0, 10),
+          },
+          accessToken,
+        );
+        parsed = {
+          originIata: remote.originIata ?? parsed.originIata,
+          destinationIata: remote.destinationIata ?? parsed.destinationIata,
+          originCity: remote.originCity ?? parsed.originCity,
+          destinationCity: remote.destinationCity ?? parsed.destinationCity,
+          departureDate: remote.departureDate ?? parsed.departureDate,
+          returnDate: remote.returnDate ?? parsed.returnDate,
+          adults: remote.adults ?? parsed.adults,
+          notes: remote.notes?.length ? remote.notes : parsed.notes,
+        };
+      } catch {
+        // Local heuristic is enough when parse API fails.
+      }
+
+      if (!parsed.originIata || !parsed.destinationIata || !parsed.departureDate) {
+        setError(
+          "could not understand the trip. include from/to cities and dates (e.g. 1 august to 6 august, tbilisi to berlin).",
+        );
+        return;
+      }
+
+      const nextOrigin = parsed.originIata;
+      const nextDestination = parsed.destinationIata;
+      const nextDepart = parsed.departureDate;
+      const nextReturn = parsed.returnDate ?? "";
+      const nextTripType: "one_way" | "round_trip" = nextReturn
+        ? "round_trip"
+        : "one_way";
+      const nextCity = parsed.destinationCity ?? city;
+      const nextAdults = String(parsed.adults ?? Math.max(1, Number(adults) || 1));
+
+      setOrigin(nextOrigin);
+      setDestination(nextDestination);
+      setDepart(nextDepart);
+      setRet(nextReturn);
+      setTripType(nextTripType);
+      setCity(nextCity);
+      setAdults(nextAdults);
+
+      const { nextFlights, nextHotels } = await runMarketSearch({
+        origin: nextOrigin,
+        destination: nextDestination,
+        depart: nextDepart,
+        ret: nextReturn,
+        city: nextCity,
+        adults: Number(nextAdults) || 1,
+        tripType: nextTripType,
+      });
+
+      setMessage(
+        `understood: ${parsed.originCity ?? nextOrigin} → ${parsed.destinationCity ?? nextDestination} · ${nextDepart}${nextReturn ? ` to ${nextReturn}` : ""} · ${nextTripType === "round_trip" ? "round trip" : "one way"} · found ${nextFlights.length} flights and ${nextHotels.length} hotels`,
+      );
+
+      if (nextFlights.length > 0 || nextHotels.length > 0) {
+        const result = await requestAiRecommendation(nextFlights, nextHotels);
+        setMessage(
+          (prev) =>
+            `${prev ?? ""} · ai pick ready (${result.source === "gemini" ? "gemini" : "rule-based"})`,
+        );
+      }
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Could not suggest trips",
+      );
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
+  async function onAskAiBestDeal() {
+    if (disabled || askingAi) return;
+    if (flights.length === 0 && hotels.length === 0) {
+      setError("search flights and hotels first, then ask ai");
+      return;
+    }
+    setAskingAi(true);
+    setError(null);
+    try {
+      const result = await requestAiRecommendation(flights, hotels);
+      setMessage(
+        `ai suggestion ready (${result.source === "gemini" ? "gemini" : "rule-based fallback"})`,
+      );
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "AI recommendation failed");
+    } finally {
+      setAskingAi(false);
+    }
+  }
+
   async function selectFlight(offer: FlightOffer) {
     setAttachingId(offer.id);
     setError(null);
     try {
       await onSelectFlight(offer);
-      setMessage(`flight selected: ${offer.summary}`);
+      setMessage(`flight selected · scroll up to see your itinerary summary`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Unable to attach flight");
     } finally {
@@ -114,7 +399,8 @@ export function TripSearchWidget({
     setError(null);
     try {
       await onSelectHotel(offer);
-      setMessage(`hotel selected: ${offer.summary}`);
+      setMessage(`hotel selected · scroll up to see your itinerary summary`);
+      setHotelDetail(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Unable to attach hotel");
     } finally {
@@ -122,126 +408,156 @@ export function TripSearchWidget({
     }
   }
 
+  function openHotelDetail(offer: HotelOffer) {
+    setHotelDetail(offer);
+    setHotelPhotoIndex(0);
+  }
+
+  function offerNameById(id: string | null | undefined, kind: "flight" | "hotel") {
+    if (!id) return "none";
+    if (kind === "flight") {
+      const offer = flights.find((f) => f.id === id);
+      if (!offer) return id;
+      return (
+        offer.summary ||
+        `${offer.airline ?? "flight"} · ${offer.origin} → ${offer.destination}`
+      );
+    }
+    const offer = hotels.find((h) => h.id === id);
+    return offer?.hotelName ?? id;
+  }
+
+  const detailPhotos = hotelDetail ? hotelImages(hotelDetail) : [];
+  const aiFlightId = aiResult?.recommendation.recommendedFlightId ?? null;
+  const aiHotelId = aiResult?.recommendation.recommendedHotelId ?? null;
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-medium text-ss-text lowercase">travel search</h2>
         <p className="mt-1 text-sm text-ss-muted lowercase">
-          serpapi flights + hotels · empty and filled search states
+          type a free-text trip request, or fill the fields below. results show 3
+          at a time — use load more for more options.
         </p>
       </div>
 
+      <div className="rounded-3xl border border-white/10 bg-ss-surface-strong p-4 sm:p-5">
+        <Label className="lowercase text-ss-muted">describe your trip</Label>
+        <textarea
+          value={nlPrompt}
+          onChange={(e) => setNlPrompt(e.target.value)}
+          disabled={disabled || suggesting}
+          rows={3}
+          placeholder="from 1 august to 6 august i want to go from tbilisi to berlin. suggest me flights and hotels."
+          className="mt-2 w-full resize-y rounded-2xl border border-white/15 bg-transparent px-4 py-3 text-sm lowercase text-ss-text placeholder:text-ss-muted focus:outline-none focus:ring-1 focus:ring-ss-accent"
+        />
+        <div className="mt-3 flex flex-wrap gap-3">
+          <Button
+            type="button"
+            disabled={disabled || suggesting}
+            onClick={() => void onSuggestFromPrompt()}
+            className="h-11 rounded-full bg-ss-accent px-6 text-white lowercase hover:bg-ss-accent-hover"
+          >
+            {suggesting ? "suggesting…" : "suggest flights & hotels"}
+          </Button>
+        </div>
+      </div>
+
       <form onSubmit={onSearch} className="space-y-4">
-        <div
-          className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-4 ${
-            filled ? "" : ""
-          }`}
-        >
-          <div
-            className={`rounded-3xl p-4 ${
-              filled
-                ? "border border-white/20 bg-ss-surface-strong"
-                : "bg-[var(--ss-tile-from)] text-[color:var(--ss-text-on-light)]"
-            }`}
-          >
-            <Label className={`lowercase ${filled ? "text-ss-muted" : "text-black/70"}`}>
-              from?
-            </Label>
-            <Input
-              required
-              maxLength={3}
-              value={origin}
-              onChange={(e) => setOrigin(e.target.value.toUpperCase())}
-              placeholder="TBS"
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-3xl border border-white/15 bg-ss-surface-strong p-4">
+            <Label className="lowercase text-ss-muted">from?</Label>
+            <AirportCombobox
+              valueIata={origin}
+              aria-label="from airport"
               disabled={disabled}
-              className={`mt-2 h-11 rounded-xl border-0 ${
-                filled
-                  ? "bg-transparent text-ss-text"
-                  : "bg-white/40 text-[color:var(--ss-text-on-light)] placeholder:text-black/40"
-              }`}
+              placeholder="tbilisi, batumi, kutaisi"
+              airports={GEORGIA_ORIGIN_AIRPORTS}
+              onChange={(airport) => setOrigin(airport?.iata ?? "")}
+              inputClassName="text-ss-text placeholder:text-ss-muted"
+              className="mt-2"
             />
           </div>
-          <div
-            className={`rounded-3xl p-4 ${
-              filled
-                ? "border border-white/20 bg-ss-surface-strong"
-                : "bg-[var(--ss-tile-to)] text-[color:var(--ss-text-on-light)]"
-            }`}
-          >
-            <Label className={`lowercase ${filled ? "text-ss-muted" : "text-black/70"}`}>
-              to?
-            </Label>
-            <Input
-              required
-              maxLength={3}
-              value={destination}
-              onChange={(e) => setDestination(e.target.value.toUpperCase())}
-              placeholder="BER"
+          <div className="rounded-3xl border border-white/15 bg-ss-surface-strong p-4">
+            <Label className="lowercase text-ss-muted">to?</Label>
+            <AirportCombobox
+              valueIata={destination}
+              aria-label="to airport"
               disabled={disabled}
-              className={`mt-2 h-11 rounded-xl border-0 ${
-                filled
-                  ? "bg-transparent text-ss-text"
-                  : "bg-white/40 text-[color:var(--ss-text-on-light)] placeholder:text-black/40"
-              }`}
+              placeholder="berlin, istanbul…"
+              onChange={(airport) => {
+                setDestination(airport?.iata ?? "");
+                if (airport && !city.trim()) {
+                  setCity(airport.city);
+                }
+              }}
+              inputClassName="text-ss-text placeholder:text-ss-muted"
+              className="mt-2"
             />
           </div>
-          <div
-            className={`rounded-3xl p-4 ${
-              filled
-                ? "border border-white/20 bg-ss-surface-strong"
-                : "bg-[var(--ss-tile-when)] text-[color:var(--ss-text-on-light)]"
-            }`}
-          >
-            <Label className={`lowercase ${filled ? "text-ss-muted" : "text-black/70"}`}>
-              when?
-            </Label>
+          <div className="rounded-3xl border border-white/15 bg-ss-surface-strong p-4">
+            <Label className="lowercase text-ss-muted">when?</Label>
             <div className="mt-2 space-y-2">
-              <Input
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => {
+                    setTripType("one_way");
+                    setRet("");
+                  }}
+                  className={`h-9 flex-1 rounded-xl text-xs lowercase transition-colors ${
+                    tripType === "one_way"
+                      ? "bg-ss-accent text-white"
+                      : "border border-white/20 text-ss-muted hover:bg-white/5"
+                  }`}
+                >
+                  one way
+                </button>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => setTripType("round_trip")}
+                  className={`h-9 flex-1 rounded-xl text-xs lowercase transition-colors ${
+                    tripType === "round_trip"
+                      ? "bg-ss-accent text-white"
+                      : "border border-white/20 text-ss-muted hover:bg-white/5"
+                  }`}
+                >
+                  round trip
+                </button>
+              </div>
+              <DateInput
                 required
-                type="date"
                 value={depart}
-                onChange={(e) => setDepart(e.target.value)}
+                onChange={setDepart}
                 disabled={disabled}
-                className={`h-10 rounded-xl border-0 ${
-                  filled
-                    ? "bg-white text-[color:var(--ss-text-on-light)]"
-                    : "bg-white/80 text-[color:var(--ss-text-on-light)]"
-                }`}
+                aria-label="depart date"
+                triggerClassName="h-10 border-white/20 bg-black/20 text-ss-text hover:border-white/35"
               />
-              <Input
-                type="date"
-                value={ret}
-                onChange={(e) => setRet(e.target.value)}
-                disabled={disabled}
-                className={`h-10 rounded-xl ${
-                  filled
-                    ? "border border-white/30 bg-transparent text-ss-text"
-                    : "border border-black/20 bg-transparent text-[color:var(--ss-text-on-light)]"
-                }`}
-              />
+              {tripType === "round_trip" ? (
+                <DateInput
+                  required
+                  value={ret}
+                  onChange={setRet}
+                  disabled={disabled}
+                  aria-label="return date"
+                  min={depart || undefined}
+                  triggerClassName="h-10 border-white/20 bg-black/20 text-ss-text hover:border-white/35"
+                />
+              ) : null}
             </div>
           </div>
-          <div
-            className={`rounded-3xl p-4 ${
-              filled
-                ? "border border-white/20 bg-ss-surface-strong"
-                : "bg-[var(--ss-tile-details)] text-[color:var(--ss-text-on-light)]"
-            }`}
-          >
-            <Label className={`lowercase ${filled ? "text-ss-muted" : "text-black/70"}`}>
-              details
-            </Label>
+          <div className="rounded-3xl border border-white/15 bg-ss-surface-strong p-4">
+            <Label className="lowercase text-ss-muted">hotel city</Label>
             <Input
               value={city}
               onChange={(e) => setCity(e.target.value)}
-              placeholder="hotel city"
+              placeholder={destinationLabel?.city ?? "city name"}
               disabled={disabled}
-              className={`mt-2 h-10 rounded-xl border-0 ${
-                filled
-                  ? "bg-transparent text-ss-text"
-                  : "bg-white/40 text-[color:var(--ss-text-on-light)] placeholder:text-black/40"
-              }`}
+              className="mt-2 h-10 rounded-xl border-0 bg-transparent text-ss-text placeholder:text-ss-muted"
             />
+            <Label className="mt-2 block lowercase text-ss-muted">adults</Label>
             <Input
               type="number"
               min={1}
@@ -249,23 +565,43 @@ export function TripSearchWidget({
               value={adults}
               onChange={(e) => setAdults(e.target.value)}
               disabled={disabled}
-              className={`mt-2 h-10 rounded-xl border-0 ${
-                filled
-                  ? "bg-transparent text-ss-text"
-                  : "bg-white/40 text-[color:var(--ss-text-on-light)]"
-              }`}
+              className="mt-1 h-10 rounded-xl border-0 bg-transparent text-ss-text"
             />
           </div>
         </div>
 
-        <Button
-          type="submit"
-          disabled={disabled || searching}
-          className="h-11 rounded-full bg-ss-accent px-8 text-white lowercase hover:bg-ss-accent-hover"
-        >
-          {searching ? "searching..." : "search"}
-        </Button>
+        <div className="flex flex-wrap gap-3">
+          <Button
+            type="submit"
+            disabled={disabled || searching}
+            className="h-11 rounded-full bg-ss-accent px-8 text-white lowercase hover:bg-ss-accent-hover"
+          >
+            {searching ? "searching market…" : "search flights & hotels"}
+          </Button>
+          <Button
+            type="button"
+            disabled={
+              disabled ||
+              askingAi ||
+              suggesting ||
+              (!hasSearched && flights.length === 0)
+            }
+            onClick={() => void onAskAiBestDeal()}
+            className="h-11 rounded-full border border-white/20 bg-transparent px-6 text-ss-text lowercase hover:bg-white/5 disabled:opacity-40"
+          >
+            {askingAi ? "ai thinking…" : "ask ai for best deal"}
+          </Button>
+        </div>
       </form>
+
+      {originLabel || destinationLabel ? (
+        <p className="text-xs text-ss-muted lowercase">
+          route: {originLabel ? `${originLabel.city} (${origin})` : origin || "—"} →{" "}
+          {destinationLabel
+            ? `${destinationLabel.city} (${destination})`
+            : destination || "—"}
+        </p>
+      ) : null}
 
       {error ? (
         <p className="text-sm text-red-300 lowercase" role="alert">
@@ -278,67 +614,433 @@ export function TripSearchWidget({
         </p>
       ) : null}
 
+      {aiResult ? (
+        <div className="rounded-2xl border border-ss-accent/30 bg-ss-surface-strong p-5 text-sm lowercase">
+          <p className="text-xs text-ss-muted">
+            ai pick ·{" "}
+            {aiResult.source === "gemini" ? "gemini" : "rule-based fallback"}
+          </p>
+          <p className="mt-2 text-ss-text">
+            flight: {offerNameById(aiFlightId, "flight")}
+          </p>
+          <p className="mt-1 text-ss-text">
+            hotel: {offerNameById(aiHotelId, "hotel")}
+          </p>
+          <p className="mt-1 font-medium text-ss-accent">
+            estimated total: {aiResult.recommendation.estimatedTotal ?? "—"}{" "}
+            {aiResult.recommendation.currency}
+          </p>
+          <p className="mt-3 leading-relaxed text-ss-text">
+            {aiResult.recommendation.reasoning}
+          </p>
+          {aiResult.recommendation.tradeoffs ? (
+            <p className="mt-2 text-ss-muted">
+              tradeoffs: {aiResult.recommendation.tradeoffs}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       {hasSearched ? (
         <div className="grid gap-6 lg:grid-cols-2">
           <div>
-            <h3 className="text-sm text-ss-muted lowercase">flights</h3>
+            <h3 className="text-sm text-ss-muted lowercase">
+              flights · cheapest first · showing {visibleFlights.length} of{" "}
+              {flights.length}
+            </h3>
             {flights.length === 0 ? (
               <p className="mt-3 text-sm text-ss-muted lowercase">no flights found</p>
             ) : (
-              <ul className="mt-3 space-y-3">
-                {flights.map((offer) => (
-                  <li
-                    key={offer.id}
-                    className="rounded-2xl border border-white/10 bg-ss-surface-strong p-4 text-sm lowercase"
+              <>
+                <ul className="mt-3 space-y-3">
+                  {visibleFlights.map((offer) => {
+                    const isCheapest = offer.id === cheapestFlightId;
+                    const isAiPick = offer.id === aiFlightId;
+                    return (
+                      <li
+                        key={offer.id}
+                        className={`rounded-2xl border p-4 text-sm lowercase ${
+                          isAiPick
+                            ? "border-ss-accent bg-ss-surface-strong"
+                            : isCheapest
+                              ? "border-ss-accent/50 bg-ss-surface-strong"
+                              : "border-white/10 bg-ss-surface-strong"
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="text-ss-text">
+                              {offer.airline ?? "airline n/a"}
+                            </p>
+                            <p className="mt-1 text-ss-muted">
+                              {offer.origin} → {offer.destination}
+                              {" · "}
+                              {offer.tripType === "round_trip"
+                                ? "round trip"
+                                : "one way"}
+                              {offer.travelClass ? ` · ${offer.travelClass}` : ""}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {isAiPick ? (
+                              <span className="rounded-full bg-ss-accent/20 px-2 py-0.5 text-[0.65rem] text-ss-accent">
+                                ai pick
+                              </span>
+                            ) : null}
+                            {isCheapest ? (
+                              <span className="rounded-full bg-white/10 px-2 py-0.5 text-[0.65rem] text-ss-muted">
+                                cheapest
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="mt-3 space-y-3">
+                        <div>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <div>
+                              <p className="text-xs text-ss-muted">depart</p>
+                              <p className="text-ss-text">
+                                {formatFlightClock(offer.departAt)}
+                              </p>
+                              <p className="text-xs text-ss-muted">
+                                {formatFlightDateTime(offer.departAt)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-ss-muted">arrive</p>
+                              <p className="text-ss-text">
+                                {formatFlightClock(offer.arriveAt)}
+                              </p>
+                              <p className="text-xs text-ss-muted">
+                                {formatFlightDateTime(offer.arriveAt)}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="mt-1 text-xs text-ss-muted">
+                            duration{" "}
+                            {formatDuration(
+                              offer.outboundDurationMinutes ??
+                                offer.totalDurationMinutes,
+                            )}
+                          </p>
+                        </div>
+                        {offer.tripType === "round_trip" ? (
+                          <div>
+                            <p className="text-xs text-ss-muted">return</p>
+                            <div className="mt-1 grid gap-2 sm:grid-cols-2">
+                              <div>
+                                <p className="text-xs text-ss-muted">depart</p>
+                                <p className="text-ss-text">
+                                  {formatFlightClock(offer.returnDepartAt)}
+                                </p>
+                                <p className="text-xs text-ss-muted">
+                                  {formatFlightDateTime(offer.returnDepartAt)}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-ss-muted">arrive</p>
+                                <p className="text-ss-text">
+                                  {formatFlightClock(offer.returnArriveAt)}
+                                </p>
+                                <p className="text-xs text-ss-muted">
+                                  {formatFlightDateTime(offer.returnArriveAt)}
+                                </p>
+                              </div>
+                            </div>
+                            <p className="mt-1 text-xs text-ss-muted">
+                              duration{" "}
+                              {formatDuration(offer.returnDurationMinutes)}
+                            </p>
+                          </div>
+                        ) : null}
+                      </div>
+
+                        <p className="mt-3 text-ss-muted">
+                          {offer.priceAmount != null
+                            ? `${offer.priceAmount} ${offer.currency ?? currency}`
+                            : "price n/a"}
+                          {" · "}
+                          {offer.tripType === "round_trip"
+                            ? "round trip"
+                            : "one way"}
+                          {" · "}
+                          {offer.stops === 0
+                            ? "direct"
+                            : `${offer.stops} stop${offer.stops === 1 ? "" : "s"}`}
+                        </p>
+                        <Button
+                          type="button"
+                          disabled={disabled || attachingId === offer.id}
+                          onClick={() => void selectFlight(offer)}
+                          className="mt-3 h-9 rounded-full bg-ss-accent px-4 text-white lowercase hover:bg-ss-accent-hover"
+                        >
+                          {attachingId === offer.id
+                            ? "attaching..."
+                            : "select flight"}
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {flightVisible < flights.length ? (
+                  <Button
+                    type="button"
+                    onClick={() =>
+                      setFlightVisible((n) =>
+                        Math.min(n + PAGE_SIZE, flights.length),
+                      )
+                    }
+                    className="mt-3 h-9 rounded-full border border-white/20 bg-transparent px-4 text-ss-text lowercase hover:bg-white/5"
                   >
-                    <p className="text-ss-text">{offer.summary}</p>
-                    <p className="mt-1 text-ss-muted">
-                      {offer.stops} stops
-                      {offer.totalDurationMinutes
-                        ? ` · ${offer.totalDurationMinutes} min`
-                        : ""}
-                    </p>
-                    <Button
-                      type="button"
-                      disabled={disabled || attachingId === offer.id}
-                      onClick={() => void selectFlight(offer)}
-                      className="mt-3 h-9 rounded-full bg-ss-accent px-4 text-white lowercase hover:bg-ss-accent-hover"
-                    >
-                      {attachingId === offer.id ? "attaching..." : "select flight"}
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+                    load more flights ({flights.length - flightVisible} left)
+                  </Button>
+                ) : null}
+              </>
             )}
           </div>
           <div>
-            <h3 className="text-sm text-ss-muted lowercase">hotels</h3>
+            <h3 className="text-sm text-ss-muted lowercase">
+              hotels · cheapest first · showing {visibleHotels.length} of{" "}
+              {hotels.length}
+            </h3>
             {hotels.length === 0 ? (
               <p className="mt-3 text-sm text-ss-muted lowercase">no hotels found</p>
             ) : (
-              <ul className="mt-3 space-y-3">
-                {hotels.map((offer) => (
-                  <li
-                    key={offer.id}
-                    className="rounded-2xl border border-white/10 bg-ss-surface-strong p-4 text-sm lowercase"
+              <>
+                <ul className="mt-3 space-y-3">
+                  {visibleHotels.map((offer) => {
+                    const isCheapest = offer.id === cheapestHotelId;
+                    const isAiPick = offer.id === aiHotelId;
+                    const photos = hotelImages(offer);
+                    return (
+                      <li
+                        key={offer.id}
+                        className={`overflow-hidden rounded-2xl border text-sm lowercase ${
+                          isAiPick
+                            ? "border-ss-accent bg-ss-surface-strong"
+                            : isCheapest
+                              ? "border-ss-accent/50 bg-ss-surface-strong"
+                              : "border-white/10 bg-ss-surface-strong"
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          className="block w-full text-left"
+                          onClick={() => openHotelDetail(offer)}
+                        >
+                          {photos[0] ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={photos[0]}
+                              alt={offer.hotelName}
+                              className="h-36 w-full object-cover"
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="flex h-24 items-center justify-center bg-white/5 text-xs text-ss-muted">
+                              no photo
+                            </div>
+                          )}
+                          <div className="p-4">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <p className="text-ss-text">{offer.hotelName}</p>
+                              <div className="flex flex-wrap gap-1">
+                                {isAiPick ? (
+                                  <span className="rounded-full bg-ss-accent/20 px-2 py-0.5 text-[0.65rem] text-ss-accent">
+                                    ai pick
+                                  </span>
+                                ) : null}
+                                {isCheapest ? (
+                                  <span className="rounded-full bg-white/10 px-2 py-0.5 text-[0.65rem] text-ss-muted">
+                                    cheapest
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                            <p className="mt-1 text-ss-muted">
+                              {offer.priceAmount != null
+                                ? `${offer.priceAmount} ${offer.currency ?? currency}`
+                                : "price n/a"}
+                              {offer.rating
+                                ? ` · ${offer.rating.toFixed(1)} rating`
+                                : ""}
+                              {photos.length > 1
+                                ? ` · ${photos.length} photos`
+                                : ""}
+                            </p>
+                            <p className="mt-2 text-xs text-ss-accent">
+                              tap for details & more photos
+                            </p>
+                          </div>
+                        </button>
+                        <div className="border-t border-white/10 px-4 py-3">
+                          <Button
+                            type="button"
+                            disabled={disabled || attachingId === offer.id}
+                            onClick={() => void selectHotel(offer)}
+                            className="h-9 rounded-full bg-ss-accent px-4 text-white lowercase hover:bg-ss-accent-hover"
+                          >
+                            {attachingId === offer.id
+                              ? "attaching..."
+                              : "select hotel"}
+                          </Button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {hotelVisible < hotels.length ? (
+                  <Button
+                    type="button"
+                    onClick={() =>
+                      setHotelVisible((n) =>
+                        Math.min(n + PAGE_SIZE, hotels.length),
+                      )
+                    }
+                    className="mt-3 h-9 rounded-full border border-white/20 bg-transparent px-4 text-ss-text lowercase hover:bg-white/5"
                   >
-                    <p className="text-ss-text">{offer.summary}</p>
-                    <p className="mt-1 text-ss-muted">
-                      {offer.rating ? `${offer.rating.toFixed(1)} rating · ` : ""}
-                      {offer.amenities.slice(0, 3).join(" · ") || "amenities n/a"}
-                    </p>
-                    <Button
-                      type="button"
-                      disabled={disabled || attachingId === offer.id}
-                      onClick={() => void selectHotel(offer)}
-                      className="mt-3 h-9 rounded-full bg-ss-accent px-4 text-white lowercase hover:bg-ss-accent-hover"
-                    >
-                      {attachingId === offer.id ? "attaching..." : "select hotel"}
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+                    load more hotels ({hotels.length - hotelVisible} left)
+                  </Button>
+                ) : null}
+              </>
             )}
+          </div>
+        </div>
+      ) : null}
+
+      {hotelDetail ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-label={hotelDetail.hotelName}
+          onClick={() => setHotelDetail(null)}
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-white/15 bg-[#071428] p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-xl font-medium lowercase text-ss-text">
+                  {hotelDetail.hotelName}
+                </h3>
+                <p className="mt-1 text-sm lowercase text-ss-muted">
+                  {hotelDetail.city ?? "—"}
+                  {hotelDetail.address ? ` · ${hotelDetail.address}` : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="text-sm lowercase text-ss-muted hover:text-ss-text"
+                onClick={() => setHotelDetail(null)}
+              >
+                close
+              </button>
+            </div>
+
+            {detailPhotos.length > 0 ? (
+              <div className="mt-4">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={detailPhotos[hotelPhotoIndex] ?? detailPhotos[0]}
+                  alt={`${hotelDetail.hotelName} photo ${hotelPhotoIndex + 1}`}
+                  className="h-56 w-full rounded-2xl object-cover sm:h-72"
+                  referrerPolicy="no-referrer"
+                />
+                {detailPhotos.length > 1 ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {detailPhotos.slice(0, 12).map((url, index) => (
+                      <button
+                        key={`${url}-${index}`}
+                        type="button"
+                        onClick={() => setHotelPhotoIndex(index)}
+                        className={`overflow-hidden rounded-lg border ${
+                          index === hotelPhotoIndex
+                            ? "border-ss-accent"
+                            : "border-white/15"
+                        }`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={url}
+                          alt=""
+                          className="h-14 w-20 object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="mt-4 grid gap-3 text-sm lowercase sm:grid-cols-2">
+              <div>
+                <p className="text-ss-muted">price</p>
+                <p className="text-ss-text">
+                  {hotelDetail.priceAmount != null
+                    ? `${hotelDetail.priceAmount} ${hotelDetail.currency ?? currency}`
+                    : "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-ss-muted">rating</p>
+                <p className="text-ss-text">
+                  {hotelDetail.rating != null
+                    ? hotelDetail.rating.toFixed(1)
+                    : "—"}
+                  {hotelDetail.stars != null ? ` · ${hotelDetail.stars}★` : ""}
+                </p>
+              </div>
+              <div>
+                <p className="text-ss-muted">check-in</p>
+                <p className="text-ss-text">{hotelDetail.checkIn}</p>
+              </div>
+              <div>
+                <p className="text-ss-muted">check-out</p>
+                <p className="text-ss-text">{hotelDetail.checkOut}</p>
+              </div>
+            </div>
+
+            {hotelDetail.description ? (
+              <p className="mt-4 text-sm leading-relaxed text-ss-muted lowercase">
+                {hotelDetail.description}
+              </p>
+            ) : null}
+
+            {hotelDetail.amenities.length > 0 ? (
+              <div className="mt-4">
+                <p className="text-xs uppercase tracking-wide text-ss-muted">
+                  amenities
+                </p>
+                <p className="mt-2 text-sm lowercase text-ss-text">
+                  {hotelDetail.amenities.join(" · ")}
+                </p>
+              </div>
+            ) : null}
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Button
+                type="button"
+                disabled={disabled || attachingId === hotelDetail.id}
+                onClick={() => void selectHotel(hotelDetail)}
+                className="h-11 rounded-full bg-ss-accent px-6 text-white lowercase hover:bg-ss-accent-hover"
+              >
+                {attachingId === hotelDetail.id
+                  ? "attaching..."
+                  : "select this hotel"}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => setHotelDetail(null)}
+                className="h-11 rounded-full border border-white/20 bg-transparent px-6 text-ss-text lowercase hover:bg-white/5"
+              >
+                back
+              </Button>
+            </div>
           </div>
         </div>
       ) : null}

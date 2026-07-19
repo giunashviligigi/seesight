@@ -134,6 +134,45 @@ describe('CompaniesService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  it('soft-removes company for super admin', async () => {
+    prisma.company.findFirst.mockResolvedValue({
+      id: 'company_a',
+      deletedAt: null,
+    });
+    prisma.company.update.mockResolvedValue({
+      id: 'company_a',
+      name: 'Acme',
+      legalName: null,
+      slug: 'acme',
+      country: null,
+      billingEmail: null,
+      timezone: 'UTC',
+      status: CompanyStatus.INACTIVE,
+      policyJson: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: new Date(),
+    });
+
+    const result = await service.remove(superAdmin, 'company_a');
+    expect(result.deletedAt).toBeTruthy();
+    expect(prisma.company.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'company_a' },
+        data: expect.objectContaining({
+          status: CompanyStatus.INACTIVE,
+          deletedAt: expect.any(Date),
+        }),
+      }),
+    );
+  });
+
+  it('blocks company admin from removing companies', async () => {
+    await expect(service.remove(adminA, 'company_a')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+  });
+
   it('prevents elevating company role checks for employee management path', async () => {
     await expect(service.update(adminB, 'company_a', { name: 'Hack' })).rejects.toBeInstanceOf(
       ForbiddenException,

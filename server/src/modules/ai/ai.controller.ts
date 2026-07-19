@@ -15,6 +15,10 @@ import {
   RecommendationHistoryResponseDto,
   RecommendItineraryResponseDto,
 } from './dto/recommendation-response.dto';
+import {
+  ParseTravelIntentDto,
+  ParseTravelIntentResponseDto,
+} from './dto/parse-travel-intent.dto';
 
 @ApiTags('ai')
 @ApiBearerAuth()
@@ -35,6 +39,20 @@ export class AiController {
     @Body() dto: RecommendItineraryDto,
   ): Promise<RecommendItineraryResponseDto> {
     return this.aiService.recommendItinerary(user, dto);
+  }
+
+  @Post('parse-travel-intent')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.EMPLOYEE)
+  @ApiOperation({
+    summary:
+      'Parse free-text trip request into origin/destination/dates (Gemini with heuristic fallback)',
+  })
+  @ApiOkResponse({ type: ParseTravelIntentResponseDto })
+  parseTravelIntent(
+    @CurrentUser() user: RequestUser,
+    @Body() dto: ParseTravelIntentDto,
+  ): Promise<ParseTravelIntentResponseDto> {
+    return this.aiService.parseTravelIntent(user, dto);
   }
 
   @Get('trips/:tripId/recommendations')

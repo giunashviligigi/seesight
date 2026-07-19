@@ -1,14 +1,39 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { authApi, AuthUser, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
 import { companiesApi, Company } from "@/lib/api/companies";
+import {
+  BUDGET_CURRENCY_OPTIONS,
+  type BudgetCurrency,
+  readCompanyBudgetPolicy,
+} from "@/lib/budget-policy";
+import { formatCountryLabel, normalizeCountryInput } from "@/lib/country";
+import { AppHeader } from "@/components/layout/app-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+
+function buildPolicyJson(budgetLimit: string, currency: BudgetCurrency) {
+  if (!budgetLimit.trim()) {
+    return {
+      defaultBudgetCurrency: currency,
+      currency,
+    };
+  }
+  const amount = Number(budgetLimit);
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new Error("budget limit must be a non-negative number");
+  }
+  return {
+    defaultBudgetLimit: amount,
+    defaultBudgetCurrency: currency,
+    currency,
+  };
+}
 
 export default function CompanySettingsPage() {
   const router = useRouter();
@@ -20,6 +45,7 @@ export default function CompanySettingsPage() {
   const [billingEmail, setBillingEmail] = useState("");
   const [timezone, setTimezone] = useState("UTC");
   const [budgetLimit, setBudgetLimit] = useState("");
+  const [budgetCurrency, setBudgetCurrency] = useState<BudgetCurrency>("EUR");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,11 +77,16 @@ export default function CompanySettingsPage() {
         setCompany(current);
         setName(current.name);
         setLegalName(current.legalName ?? "");
-        setCountry(current.country ?? "");
+        setCountry(formatCountryLabel(current.country));
         setBillingEmail(current.billingEmail ?? "");
         setTimezone(current.timezone);
-        const limit = current.policyJson?.defaultBudgetLimit;
-        setBudgetLimit(typeof limit === "number" ? String(limit) : "");
+        const policy = readCompanyBudgetPolicy(current.policyJson);
+        setBudgetLimit(
+          policy.defaultBudgetLimit === null
+            ? ""
+            : String(policy.defaultBudgetLimit),
+        );
+        setBudgetCurrency(policy.defaultBudgetCurrency);
       } catch (err) {
         storeAccessToken(null);
         setError(err instanceof ApiError ? err.message : "Unable to load company");
@@ -73,17 +104,34 @@ export default function CompanySettingsPage() {
     setMessage(null);
 
     try {
+      let countryCode: string | undefined;
+      try {
+        countryCode = normalizeCountryInput(country) || undefined;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Invalid country");
+        setSaving(false);
+        return;
+      }
+
+      let policyJson: Record<string, unknown>;
+      try {
+        policyJson = buildPolicyJson(budgetLimit, budgetCurrency);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Invalid budget limit");
+        setSaving(false);
+        return;
+      }
+
       const created = await companiesApi.create({
         name,
         legalName: legalName || undefined,
-        country: country || undefined,
+        country: countryCode,
         billingEmail: billingEmail || undefined,
         timezone,
-        policyJson: budgetLimit
-          ? { defaultBudgetLimit: Number(budgetLimit), currency: "EUR" }
-          : undefined,
+        policyJson,
       });
       setCompany(created);
+      setCountry(formatCountryLabel(created.country));
       setMessage("company created and linked to your account.");
       const me = await authApi.me();
       setUser(me);
@@ -102,17 +150,34 @@ export default function CompanySettingsPage() {
     setMessage(null);
 
     try {
+      let countryCode: string | null;
+      try {
+        countryCode = normalizeCountryInput(country) || null;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Invalid country");
+        setSaving(false);
+        return;
+      }
+
+      let policyJson: Record<string, unknown>;
+      try {
+        policyJson = buildPolicyJson(budgetLimit, budgetCurrency);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Invalid budget limit");
+        setSaving(false);
+        return;
+      }
+
       const updated = await companiesApi.update(company.id, {
         name,
         legalName: legalName || null,
-        country: country || null,
+        country: countryCode,
         billingEmail: billingEmail || null,
         timezone,
-        policyJson: budgetLimit
-          ? { defaultBudgetLimit: Number(budgetLimit), currency: "EUR" }
-          : null,
+        policyJson,
       });
       setCompany(updated);
+      setCountry(formatCountryLabel(updated.country));
       setMessage("company profile updated.");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Unable to update company");
@@ -129,27 +194,17 @@ export default function CompanySettingsPage() {
     );
   }
 
+  if (!user) {
+    return (
+      <main className="flex min-h-screen items-center justify-center px-6">
+        <p className="text-ss-muted lowercase">{error ?? "redirecting..."}</p>
+      </main>
+    );
+  }
+
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-6 py-10">
-      <header className="flex items-center justify-between">
-        <Link href="/" className="text-sm font-semibold tracking-[0.35em] text-ss-text uppercase">
-          Seesight
-        </Link>
-        <div className="flex gap-3">
-          <Link href="/dashboard" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            dashboard
-          </Link>
-          <Link href="/trips" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            trips
-          </Link>
-          <Link href="/employees" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            employees
-          </Link>
-          <Link href="/account" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            account
-          </Link>
-        </div>
-      </header>
+      <AppHeader user={user} />
 
       <section className="mt-12 rounded-3xl border border-white/15 bg-ss-surface p-8">
         <h1 className="text-3xl font-medium text-ss-text lowercase">
@@ -183,9 +238,9 @@ export default function CompanySettingsPage() {
             <div className="space-y-2">
               <Label className="lowercase text-ss-muted">country</Label>
               <Input
-                maxLength={2}
                 value={country}
                 onChange={(e) => setCountry(e.target.value)}
+                placeholder="Georgia"
                 className="h-11 rounded-xl border-white/20 bg-ss-surface-strong text-ss-text"
               />
             </div>
@@ -207,16 +262,38 @@ export default function CompanySettingsPage() {
               className="h-11 rounded-xl border-white/20 bg-ss-surface-strong text-ss-text"
             />
           </div>
-          <div className="space-y-2">
-            <Label className="lowercase text-ss-muted">default budget limit</Label>
-            <Input
-              type="number"
-              min={0}
-              value={budgetLimit}
-              onChange={(e) => setBudgetLimit(e.target.value)}
-              className="h-11 rounded-xl border-white/20 bg-ss-surface-strong text-ss-text"
-            />
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label className="lowercase text-ss-muted">
+                default trip budget limit
+              </Label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                value={budgetLimit}
+                onChange={(e) => setBudgetLimit(e.target.value)}
+                placeholder="e.g. 2000"
+                className="h-11 rounded-xl border-white/20 bg-ss-surface-strong text-ss-text"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="lowercase text-ss-muted">currency</Label>
+              <Select
+                value={budgetCurrency}
+                onValueChange={(value) =>
+                  setBudgetCurrency(value as BudgetCurrency)
+                }
+                aria-label="budget currency"
+                options={BUDGET_CURRENCY_OPTIONS}
+              />
+            </div>
           </div>
+          <p className="text-xs text-ss-muted lowercase">
+            this is a suggested maximum budget for each trip (not a monthly company
+            total). new trips can prefill from this amount and currency.
+          </p>
 
           {company ? (
             <p className="text-xs text-ss-muted lowercase">

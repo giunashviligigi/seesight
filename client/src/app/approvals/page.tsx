@@ -4,14 +4,17 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
-import { authApi, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
+import { authApi, AuthUser, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
 import { approvalsApi, PendingApproval } from "@/lib/api/approvals";
+import { formatCountryLabel } from "@/lib/country";
+import { AppHeader, APPROVALS_UPDATED_EVENT } from "@/components/layout/app-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function ApprovalsPage() {
   const router = useRouter();
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [items, setItems] = useState<PendingApproval[]>([]);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +39,7 @@ export default function ApprovalsPage() {
     void (async () => {
       try {
         const me = await authApi.me(token);
+        setUser(me);
         if (me.role === "SUPER_ADMIN") {
           router.replace("/companies");
           return;
@@ -75,6 +79,7 @@ export default function ApprovalsPage() {
         setMessage("trip rejected.");
       }
       await load(token);
+      window.dispatchEvent(new Event(APPROVALS_UPDATED_EVENT));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Decision failed");
     } finally {
@@ -82,7 +87,7 @@ export default function ApprovalsPage() {
     }
   }
 
-  if (loading) {
+  if (loading || !user) {
     return (
       <main className="flex min-h-screen items-center justify-center px-6">
         <p className="text-ss-muted lowercase">loading approvals...</p>
@@ -92,25 +97,7 @@ export default function ApprovalsPage() {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-10">
-      <header className="flex items-center justify-between gap-4">
-        <Link href="/" className="text-sm font-semibold tracking-[0.35em] text-ss-text uppercase">
-          Seesight
-        </Link>
-        <nav className="flex flex-wrap gap-3">
-          <Link href="/dashboard" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            dashboard
-          </Link>
-          <Link href="/trips" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            trips
-          </Link>
-          <Link href="/notifications" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            notifications
-          </Link>
-          <Link href="/account" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            account
-          </Link>
-        </nav>
-      </header>
+      <AppHeader user={user} pendingApprovalsCount={total} />
 
       <section className="mt-12 rounded-3xl border border-white/15 bg-ss-surface p-8">
         <h1 className="text-3xl font-medium text-ss-text lowercase">approvals</h1>
@@ -147,7 +134,10 @@ export default function ApprovalsPage() {
                       {item.purpose}
                     </Link>
                     <p className="mt-1 text-sm text-ss-muted lowercase">
-                      {[item.destinationCity, item.destinationCountry]
+                      {[
+                        item.destinationCity,
+                        formatCountryLabel(item.destinationCountry) || null,
+                      ]
                         .filter(Boolean)
                         .join(", ") || "destination TBD"}{" "}
                       · {item.startDate} → {item.endDate}

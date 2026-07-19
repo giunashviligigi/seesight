@@ -59,9 +59,11 @@ type SerpHotelProperty = {
   rate_per_night?: { extracted_lowest?: number };
   total_rate?: { extracted_lowest?: number };
   amenities?: string[];
-  images?: Array<{ thumbnail?: string }>;
+  images?: Array<{ thumbnail?: string; original_image?: string }>;
   gps_coordinates?: { latitude?: number; longitude?: number };
   description?: string;
+  link?: string;
+  address?: string;
 };
 
 type SerpHotelsResponse = {
@@ -139,17 +141,54 @@ export class TravelSearchService {
     const options = [
       ...(raw.best_flights ?? []),
       ...(raw.other_flights ?? []),
-    ].slice(0, 20);
+    ].slice(0, isRoundTrip ? 6 : 20);
 
-    const items = options.map((option, index) =>
-      this.normalizeFlight(
-        option,
-        origin,
-        destination,
-        currency,
-        index,
-      ),
-    );
+    const items: FlightOfferDto[] = [];
+    for (let index = 0; index < options.length; index += 1) {
+      const option = options[index];
+      let returnOption: SerpFlightOption | null = null;
+
+      if (isRoundTrip && option.departure_token) {
+        try {
+          const returnRaw = await this.serpApi.search<SerpFlightsResponse>({
+            engine: 'google_flights',
+            departure_id: origin,
+            arrival_id: destination,
+            outbound_date: query.departureDate,
+            return_date: query.returnDate,
+            adults,
+            currency,
+            hl: 'en',
+            type: 1,
+            travel_class: travelClassMap[travelClass] ?? 1,
+            departure_token: option.departure_token,
+          });
+          const returns = [
+            ...(returnRaw.best_flights ?? []),
+            ...(returnRaw.other_flights ?? []),
+          ];
+          returnOption = this.pickCheapestFlightOption(returns);
+        } catch (error) {
+          this.logger.warn(
+            `Unable to load return flights for outbound #${index}: ${
+              error instanceof Error ? error.message : 'unknown'
+            }`,
+          );
+        }
+      }
+
+      items.push(
+        this.normalizeFlight(
+          option,
+          origin,
+          destination,
+          currency,
+          index,
+          isRoundTrip,
+          returnOption,
+        ),
+      );
+    }
 
     this.cache.set(cacheKey, items);
     return { items, cached: false, provider: 'SERPAPI' };
@@ -218,41 +257,113 @@ export class TravelSearchService {
     }
   }
 
+  private pickCheapestFlightOption(
+    options: SerpFlightOption[],
+  ): SerpFlightOption | null {
+    if (options.length === 0) return null;
+    let best = options[0];
+    let bestPrice = best.price ?? Number.POSITIVE_INFINITY;
+    for (let i = 1; i < options.length; i += 1) {
+      const price = options[i].price ?? Number.POSITIVE_INFINITY;
+      if (price < bestPrice) {
+        best = options[i];
+        bestPrice = price;
+      }
+    }
+    return best;
+  }
+
   private normalizeFlight(
     option: SerpFlightOption,
     fallbackOrigin: string,
     fallbackDestination: string,
     currency: string,
     index: number,
+    searchIsRoundTrip: boolean,
+    returnOption: SerpFlightOption | null = null,
   ): FlightOfferDto {
-    const legs = option.flights ?? [];
-    const first = legs[0];
-    const last = legs[legs.length - 1];
+    const outboundLegs = option.flights ?? [];
+    const returnLegs = returnOption?.flights ?? [];
+    const first = outboundLegs[0];
+    const last = outboundLegs[outboundLegs.length - 1];
+    const returnFirst = returnLegs[0];
+    const returnLast = returnLegs[returnLegs.length - 1];
+
     const origin = first?.departure_airport?.id ?? fallbackOrigin;
     const destination = last?.arrival_airport?.id ?? fallbackDestination;
     const departAt = first?.departure_airport?.time
       ? this.toIsoDateTime(first.departure_airport.time)
       : null;
-    const returnAt =
-      option.type?.toLowerCase().includes('round') && last?.arrival_airport?.time
-        ? this.toIsoDateTime(last.arrival_airport.time)
-        : null;
+    const arriveAt = last?.arrival_airport?.time
+      ? this.toIsoDateTime(last.arrival_airport.time)
+      : null;
+    const returnDepartAt = returnFirst?.departure_airport?.time
+      ? this.toIsoDateTime(returnFirst.departure_airport.time)
+      : null;
+    const returnArriveAt = returnLast?.arrival_airport?.time
+      ? this.toIsoDateTime(returnLast.arrival_airport.time)
+      : null;
 
-    const flightNumbers = legs
+    const optionType = (option.type ?? '').toLowerCase();
+    const tripType: 'one_way' | 'round_trip' =
+      searchIsRoundTrip ||
+      optionType.includes('round') ||
+      optionType.includes('return') ||
+      returnLegs.length > 0
+        ? 'round_trip'
+        : 'one_way';
+
+    const allLegs = [...outboundLegs, ...returnLegs];
+    const flightNumbers = allLegs
       .map((leg) => leg.flight_number)
       .filter((v): v is string => Boolean(v));
-    const airline = first?.airline ?? null;
-    const stops = Math.max(0, legs.length - 1);
-    const providerOfferId =
+    const airlines = [
+      ...new Set(
+        allLegs
+          .map((leg) => leg.airline)
+          .filter((v): v is string => Boolean(v)),
+      ),
+    ];
+    const airline = airlines.length > 0 ? airlines.join(' / ') : null;
+    const stops = Math.max(
+      0,
+      outboundLegs.length - 1,
+    ) + Math.max(0, returnLegs.length - 1);
+
+    const vendorToken =
+      returnOption?.booking_token ||
       option.booking_token ||
       option.departure_token ||
-      this.hashId(['flight', origin, destination, departAt, index]);
+      null;
+    const providerOfferId = this.hashId([
+      'flight',
+      origin,
+      destination,
+      departAt,
+      arriveAt,
+      returnDepartAt,
+      returnArriveAt,
+      returnOption?.price ?? option.price ?? null,
+      vendorToken,
+      index,
+    ]);
 
+    const priceAmount = returnOption?.price ?? option.price ?? null;
+    const outboundDurationMinutes =
+      option.total_duration != null && option.total_duration > 0
+        ? option.total_duration
+        : null;
+    const returnDurationMinutes =
+      returnOption?.total_duration != null && returnOption.total_duration > 0
+        ? returnOption.total_duration
+        : null;
+
+    const tripLabel = tripType === 'round_trip' ? 'round trip' : 'one way';
     const summary = [
       airline ?? 'Flight',
-      flightNumbers.join(' / ') || null,
+      tripLabel,
       `${origin} → ${destination}`,
-      option.price != null ? `${option.price} ${currency}` : null,
+      priceAmount != null ? `${priceAmount} ${currency}` : null,
     ]
       .filter(Boolean)
       .join(' · ');
@@ -264,23 +375,36 @@ export class TravelSearchService {
       origin,
       destination,
       departAt,
-      returnAt,
+      arriveAt,
+      returnAt: returnArriveAt,
+      returnDepartAt,
+      returnArriveAt,
+      tripType,
       airline,
       flightNumbers,
       stops,
-      totalDurationMinutes: option.total_duration ?? null,
+      totalDurationMinutes: outboundDurationMinutes,
+      outboundDurationMinutes,
+      returnDurationMinutes,
       travelClass: first?.travel_class ?? null,
-      priceAmount: option.price ?? null,
+      priceAmount,
       currency,
       summary,
       rawPayload: {
         source: 'serpapi_google_flights',
         type: option.type ?? null,
-        flights: legs,
+        tripType,
+        flights: outboundLegs,
+        return_flights: returnLegs,
         layovers: option.layovers ?? [],
+        return_layovers: returnOption?.layovers ?? [],
         total_duration: option.total_duration ?? null,
-        price: option.price ?? null,
-        booking_token: option.booking_token ?? null,
+        return_total_duration: returnOption?.total_duration ?? null,
+        price: priceAmount,
+        booking_token:
+          returnOption?.booking_token ?? option.booking_token ?? null,
+        departure_token: option.departure_token ?? null,
+        airline_logo: option.airline_logo ?? null,
       },
     };
   }
@@ -292,7 +416,11 @@ export class TravelSearchService {
     checkOut: string,
     currency: string,
   ): HotelOfferDto {
-    const providerOfferId = property.property_token as string;
+    const vendorToken = property.property_token as string;
+    const providerOfferId =
+      vendorToken.length <= 120
+        ? vendorToken
+        : this.hashId(['hotel', vendorToken]);
     const stars =
       typeof property.extracted_hotel_class === 'number'
         ? property.extracted_hotel_class
@@ -303,6 +431,11 @@ export class TravelSearchService {
       property.total_rate?.extracted_lowest ??
       property.rate_per_night?.extracted_lowest ??
       null;
+
+    const images = (property.images ?? [])
+      .map((img) => img.original_image || img.thumbnail)
+      .filter((url): url is string => Boolean(url));
+    const thumbnail = images[0] ?? property.images?.[0]?.thumbnail ?? null;
 
     const summary = [
       property.name,
@@ -325,7 +458,10 @@ export class TravelSearchService {
       priceAmount,
       currency,
       amenities: property.amenities ?? [],
-      thumbnail: property.images?.[0]?.thumbnail ?? null,
+      thumbnail,
+      images,
+      description: property.description ?? null,
+      address: property.address ?? null,
       summary,
       rawPayload: {
         source: 'serpapi_google_hotels',
@@ -337,6 +473,9 @@ export class TravelSearchService {
         total_rate: property.total_rate ?? null,
         amenities: property.amenities ?? [],
         description: property.description ?? null,
+        address: property.address ?? null,
+        link: property.link ?? null,
+        images,
       },
     };
   }

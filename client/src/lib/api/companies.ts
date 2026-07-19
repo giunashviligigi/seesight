@@ -10,6 +10,8 @@ export type Company = {
   slug: string;
   country: string | null;
   billingEmail: string | null;
+  /** Present on super-admin company list — who manages the tenant. */
+  adminEmails?: string[];
   timezone: string;
   status: CompanyStatus;
   policyJson: Record<string, unknown> | null;
@@ -101,6 +103,13 @@ export const companiesApi = {
   activate(id: string, accessToken?: string | null) {
     return apiRequest<Company>(`/companies/${id}/activate`, {
       method: "POST",
+      accessToken: authToken(accessToken),
+    });
+  },
+
+  remove(id: string, accessToken?: string | null) {
+    return apiRequest<Company>(`/companies/${id}`, {
+      method: "DELETE",
       accessToken: authToken(accessToken),
     });
   },

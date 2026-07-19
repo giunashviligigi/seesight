@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -110,6 +111,20 @@ export class CompaniesController {
     @Param('id') id: string,
   ): Promise<CompanyResponseDto> {
     return this.companiesService.activate(user, id);
+  }
+
+  @Delete(':id')
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({
+    summary:
+      'Soft-remove a company (sets deletedAt; hidden from directory; super admin)',
+  })
+  @ApiOkResponse({ type: CompanyResponseDto })
+  remove(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+  ): Promise<CompanyResponseDto> {
+    return this.companiesService.remove(user, id);
   }
 
   @Post(':id/assign-admin')

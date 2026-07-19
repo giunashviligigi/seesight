@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   Employee,
+  NotificationType,
   Prisma,
   UserRole,
   UserStatus,
@@ -13,12 +14,14 @@ import {
 import { createHash, randomBytes } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { parseCountryCode } from '../../common/geo/country';
 import {
   assertCanManageCompany,
   assertCompanyAccess,
   resolveTenantCompanyId,
 } from '../../common/tenant/tenant.utils';
 import { RequestUser } from '../auth/types/auth.types';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   CreateEmployeeDto,
   ListEmployeesQueryDto,
@@ -36,7 +39,10 @@ type EmployeeWithDepartment = Employee & {
 
 @Injectable()
 export class EmployeesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   async create(
     actor: RequestUser,
@@ -86,6 +92,7 @@ export class EmployeesService {
             role: UserRole.EMPLOYEE,
             status: UserStatus.ACTIVE,
             companyId,
+            mustChangePassword: true,
           },
         });
         userId = user.id;
@@ -101,7 +108,7 @@ export class EmployeesService {
           lastName: dto.lastName.trim(),
           jobTitle: dto.jobTitle?.trim() || null,
           phone: dto.phone?.trim() || null,
-          nationality: dto.nationality?.toUpperCase() || null,
+          nationality: parseCountryCode(dto.nationality),
           passportNumber: dto.passportNumber?.trim() || null,
           preferredAirport: dto.preferredAirport?.toUpperCase() || null,
           status: UserStatus.ACTIVE,
@@ -109,6 +116,15 @@ export class EmployeesService {
         include: { department: { select: { name: true } } },
       });
     });
+
+    if (temporaryPassword) {
+      await this.notificationsService.create({
+        userId: actor.id,
+        type: NotificationType.EMPLOYEE_TEMP_PASSWORD,
+        title: `one-time password for ${employee.firstName} ${employee.lastName}`,
+        body: `Account ${employee.email} was created with a temporary password. Share this one-time password (they must change it on first login): ${temporaryPassword}`,
+      });
+    }
 
     return {
       ...this.toResponse(employee),
@@ -217,7 +233,7 @@ export class EmployeesService {
         nationality:
           dto.nationality === undefined
             ? undefined
-            : dto.nationality?.toUpperCase() || null,
+            : parseCountryCode(dto.nationality),
         passportNumber:
           dto.passportNumber === undefined
             ? undefined
@@ -290,6 +306,47 @@ export class EmployeesService {
       return tx.employee.update({
         where: { id },
         data: { status: UserStatus.ACTIVE },
+        include: { department: { select: { name: true } } },
+      });
+    });
+
+    return this.toResponse(updated);
+  }
+
+  /**
+   * Soft-delete roster row and disable linked login so the email can be reused.
+   * Trip history stays intact (employee traveler links remain).
+   */
+  async remove(
+    actor: RequestUser,
+    id: string,
+  ): Promise<EmployeeResponseDto> {
+    assertCanManageCompany(actor);
+    const existing = await this.findVisibleEmployee(actor, id);
+
+    const tombstoneEmail = `deleted+${existing.id}@seesight.local`;
+    const deletedAt = new Date();
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (existing.userId) {
+        await tx.user.update({
+          where: { id: existing.userId },
+          data: {
+            status: UserStatus.INACTIVE,
+            email: tombstoneEmail,
+            mustChangePassword: false,
+          },
+        });
+      }
+
+      return tx.employee.update({
+        where: { id },
+        data: {
+          deletedAt,
+          status: UserStatus.INACTIVE,
+          email: tombstoneEmail,
+          userId: null,
+        },
         include: { department: { select: { name: true } } },
       });
     });

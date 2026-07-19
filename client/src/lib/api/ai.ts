@@ -37,6 +37,18 @@ function authToken(token?: string | null) {
   return token ?? getStoredAccessToken();
 }
 
+export type ParseTravelIntentResponse = {
+  originIata: string | null;
+  destinationIata: string | null;
+  originCity: string | null;
+  destinationCity: string | null;
+  departureDate: string | null;
+  returnDate: string | null;
+  adults: number | null;
+  source: "gemini" | "heuristic";
+  notes: string[];
+};
+
 export const aiApi = {
   recommendItinerary(
     body: {
@@ -68,6 +80,17 @@ export const aiApi = {
     accessToken?: string | null,
   ) {
     return apiRequest<RecommendItineraryResponse>("/ai/recommend-itinerary", {
+      method: "POST",
+      body,
+      accessToken: authToken(accessToken),
+    });
+  },
+
+  parseTravelIntent(
+    body: { prompt: string; referenceDate?: string },
+    accessToken?: string | null,
+  ) {
+    return apiRequest<ParseTravelIntentResponse>("/ai/parse-travel-intent", {
       method: "POST",
       body,
       accessToken: authToken(accessToken),

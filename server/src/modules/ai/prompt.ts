@@ -15,12 +15,18 @@ export type PromptTripContext = {
   policyStub: Record<string, unknown> | null;
 };
 
-export const SYSTEM_INSTRUCTION = `You are SeeSight's business travel assistant.
-Recommend the best flight and hotel combination from the provided shortlist only.
-Return JSON only — never markdown or prose outside JSON.
-Do not invent offer ids. Every id must come from the input lists.
-Never request or echo passwords, tokens, emails, or passport numbers.
-Prefer cost efficiency while noting duration/convenience tradeoffs.`;
+export const SYSTEM_INSTRUCTION = `You are SeeSight's business travel assistant for company trips.
+Pick the best flight + hotel combo STRICTLY from the provided shortlist.
+Return JSON only — never markdown fences or extra prose.
+Rules:
+1) Every recommended/alternative id MUST exactly match an input flights[].id or hotels[].id.
+2) Prefer the lowest total cost (flight price + hotel price) when quality is similar.
+3) Prefer fewer stops and reasonable duration unless the cheaper option is dramatically better value.
+4) Prefer hotels with better rating/stars when prices are close.
+5) Respect trip budgetAmount when present — flag overspend in tradeoffs.
+6) reasoning must name airline/route and hotel by human-readable summary text, not only raw ids.
+7) estimatedTotal must equal recommended flight priceAmount + hotel priceAmount when both exist.
+8) Never invent offers, prices, airports, or dates.`;
 
 export function buildUserPrompt(input: {
   trip: PromptTripContext;
@@ -28,6 +34,14 @@ export function buildUserPrompt(input: {
   hotels: ShortlistHotelOfferDto[];
 }): string {
   const payload = {
+    task: 'Choose one flight id and one hotel id that form the best business itinerary.',
+    rankingPriority: [
+      'stay within budget when possible',
+      'minimize total price',
+      'prefer direct or fewer stops',
+      'prefer shorter totalDurationMinutes when price delta is small',
+      'prefer higher hotel stars/rating when price delta is small',
+    ],
     trip: {
       purpose: input.trip.purpose,
       destinationCity: input.trip.destinationCity,
@@ -63,9 +77,10 @@ export function buildUserPrompt(input: {
     responseSchema: {
       recommendedFlightId: 'string | null — must match a flights[].id',
       recommendedHotelId: 'string | null — must match a hotels[].id',
-      estimatedTotal: 'number | null',
+      estimatedTotal: 'number | null — sum of chosen flight+hotel prices',
       currency: 'string',
-      reasoning: 'string — human-readable, cite offer ids',
+      reasoning:
+        'string — plain language explaining why this combo wins; mention airline and hotel name',
       tradeoffs: 'string | null — cheapest vs shortest / convenience',
       alternatives: [
         {

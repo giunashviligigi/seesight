@@ -5,11 +5,18 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { authApi, AuthUser, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
+import { companiesApi } from "@/lib/api/companies";
 import { departmentsApi, Department } from "@/lib/api/departments";
+import { employeesApi } from "@/lib/api/employees";
 import { tripsApi, Trip, TripStatus } from "@/lib/api/trips";
+import { readCompanyBudgetPolicy } from "@/lib/budget-policy";
+import { formatCountryLabel } from "@/lib/country";
+import { AppHeader } from "@/components/layout/app-header";
 import { Button } from "@/components/ui/button";
+import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 
 const STATUSES: Array<TripStatus | ""> = [
   "",
@@ -27,7 +34,10 @@ function formatStatus(status: string) {
 }
 
 function destinationLabel(trip: Trip) {
-  const parts = [trip.destinationCity, trip.destinationCountry].filter(Boolean);
+  const parts = [
+    trip.destinationCity,
+    formatCountryLabel(trip.destinationCountry) || null,
+  ].filter(Boolean);
   return parts.length > 0 ? parts.join(", ") : "destination TBD";
 }
 
@@ -45,6 +55,7 @@ export default function TripsPage() {
   const [departmentId, setDepartmentId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
 
   async function loadTrips(
     token: string,
@@ -119,6 +130,63 @@ export default function TripsPage() {
     }
   }
 
+  async function onNewTrip() {
+    const token = getStoredAccessToken();
+    if (!token || !user || creating) return;
+    setCreating(true);
+    setError(null);
+    try {
+      let travelerId: string | null = null;
+      if (user.role === "EMPLOYEE") {
+        const profile = await employeesApi.me(token);
+        travelerId = profile.id;
+      } else {
+        try {
+          const profile = await employeesApi.me(token);
+          travelerId = profile.id;
+        } catch {
+          const roster = await employeesApi.list(
+            { page: 1, pageSize: 1, status: "ACTIVE" },
+            token,
+          );
+          travelerId = roster.items[0]?.id ?? null;
+        }
+      }
+      if (!travelerId) {
+        throw new ApiError(
+          "add at least one active employee before creating a trip",
+          400,
+        );
+      }
+
+      let budgetAmount: number | undefined;
+      let budgetCurrency: string | undefined;
+      try {
+        const company = await companiesApi.me(token);
+        const policy = readCompanyBudgetPolicy(company.policyJson);
+        budgetCurrency = policy.defaultBudgetCurrency;
+        if (policy.defaultBudgetLimit !== null) {
+          budgetAmount = policy.defaultBudgetLimit;
+        }
+      } catch {
+        // Budget policy is optional for draft creation.
+      }
+
+      const created = await tripsApi.create(
+        {
+          budgetAmount,
+          budgetCurrency,
+          travelers: [{ employeeId: travelerId, isPrimary: true }],
+        },
+        token,
+      );
+      router.push(`/trips/${created.id}`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Unable to create trip");
+      setCreating(false);
+    }
+  }
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center px-6">
@@ -127,33 +195,21 @@ export default function TripsPage() {
     );
   }
 
-  const isEmployee = user?.role === "EMPLOYEE";
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  if (!user) {
+    return (
+      <main className="flex min-h-screen items-center justify-center px-6">
+        <p className="text-ss-muted lowercase">{error ?? "redirecting..."}</p>
+      </main>
+    );
+  }
+
+  const isEmployee = user.role === "EMPLOYEE";
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-10">
-      <header className="flex items-center justify-between gap-4">
-        <Link href="/" className="text-sm font-semibold tracking-[0.35em] text-ss-text uppercase">
-          Seesight
-        </Link>
-        <nav className="flex flex-wrap items-center justify-end gap-3">
-          <Link href="/dashboard" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            dashboard
-          </Link>
-          {isEmployee ? (
-            <Link href="/profile" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-              profile
-            </Link>
-          ) : (
-            <Link href="/employees" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-              employees
-            </Link>
-          )}
-          <Link href="/account" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            account
-          </Link>
-        </nav>
-      </header>
+      <AppHeader user={user} />
 
       <section className="mt-12 rounded-3xl border border-white/15 bg-ss-surface p-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -163,12 +219,14 @@ export default function TripsPage() {
               create, filter, and track business trip history — cancelled trips stay visible.
             </p>
           </div>
-          <Link
-            href="/trips/new"
-            className="inline-flex h-10 items-center justify-center rounded-full bg-ss-accent px-5 text-sm text-white lowercase hover:bg-ss-accent-hover"
+          <Button
+            type="button"
+            disabled={creating}
+            onClick={() => void onNewTrip()}
+            className="h-10 rounded-full bg-ss-accent px-5 text-sm text-white lowercase hover:bg-ss-accent-hover"
           >
-            new trip
-          </Link>
+            {creating ? "opening…" : "new trip"}
+          </Button>
         </div>
 
         {error ? (
@@ -180,51 +238,36 @@ export default function TripsPage() {
         <form className="mt-8 grid gap-3 md:grid-cols-5" onSubmit={onFilter}>
           <div className="space-y-2">
             <Label className="lowercase text-ss-muted">status</Label>
-            <select
+            <Select
               value={status}
-              onChange={(e) => setStatus(e.target.value as TripStatus | "")}
-              className="flex h-11 w-full rounded-xl border border-white/20 bg-ss-surface-strong px-3 text-sm text-ss-text lowercase"
-            >
-              {STATUSES.map((s) => (
-                <option key={s || "all"} value={s}>
-                  {s ? formatStatus(s) : "all"}
-                </option>
-              ))}
-            </select>
+              onValueChange={(v) => setStatus(v as TripStatus | "")}
+              aria-label="status"
+              options={STATUSES.map((s) => ({
+                value: s,
+                label: s ? formatStatus(s) : "all",
+              }))}
+            />
           </div>
           <div className="space-y-2">
             <Label className="lowercase text-ss-muted">from</Label>
-            <Input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="h-11 rounded-xl border-white/20 bg-ss-surface-strong text-ss-text"
-            />
+            <DateInput value={from} onChange={setFrom} aria-label="from date" />
           </div>
           <div className="space-y-2">
             <Label className="lowercase text-ss-muted">to</Label>
-            <Input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="h-11 rounded-xl border-white/20 bg-ss-surface-strong text-ss-text"
-            />
+            <DateInput value={to} onChange={setTo} aria-label="to date" />
           </div>
           {!isEmployee ? (
             <div className="space-y-2">
               <Label className="lowercase text-ss-muted">department</Label>
-              <select
+              <Select
                 value={departmentId}
-                onChange={(e) => setDepartmentId(e.target.value)}
-                className="flex h-11 w-full rounded-xl border border-white/20 bg-ss-surface-strong px-3 text-sm text-ss-text lowercase"
-              >
-                <option value="">all</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
+                onValueChange={setDepartmentId}
+                aria-label="department"
+                options={[
+                  { value: "", label: "all" },
+                  ...departments.map((d) => ({ value: d.id, label: d.name })),
+                ]}
+              />
             </div>
           ) : (
             <div />
@@ -252,7 +295,9 @@ export default function TripsPage() {
                   className="flex flex-col gap-2 transition hover:opacity-90 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div>
-                    <p className="text-ss-text lowercase">{trip.purpose}</p>
+                    <p className="text-ss-text lowercase">
+                      {trip.purpose || "untitled trip"}
+                    </p>
                     <p className="mt-1 text-sm text-ss-muted lowercase">
                       {destinationLabel(trip)} · {trip.travelers.length} traveler
                       {trip.travelers.length === 1 ? "" : "s"}

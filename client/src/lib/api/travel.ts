@@ -8,11 +8,17 @@ export type FlightOffer = {
   origin: string;
   destination: string;
   departAt: string | null;
+  arriveAt: string | null;
   returnAt: string | null;
+  returnDepartAt: string | null;
+  returnArriveAt: string | null;
+  tripType: "one_way" | "round_trip";
   airline: string | null;
   flightNumbers: string[];
   stops: number;
   totalDurationMinutes: number | null;
+  outboundDurationMinutes: number | null;
+  returnDurationMinutes: number | null;
   travelClass: string | null;
   priceAmount: number | null;
   currency: string | null;
@@ -34,6 +40,9 @@ export type HotelOffer = {
   currency: string | null;
   amenities: string[];
   thumbnail: string | null;
+  images: string[];
+  description: string | null;
+  address: string | null;
   summary: string;
   rawPayload: Record<string, unknown>;
 };

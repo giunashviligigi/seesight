@@ -1,13 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
-import { authApi, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
+import { authApi, AuthUser, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
 import { reportsApi, ReportsSummary } from "@/lib/api/reports";
+import { AppHeader } from "@/components/layout/app-header";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 
 function formatMoney(amount: number, currency: string) {
@@ -70,6 +70,7 @@ function BarList({
 
 export default function ReportsPage() {
   const router = useRouter();
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [summary, setSummary] = useState<ReportsSummary | null>(null);
   const [from, setFrom] = useState("2026-01-01");
   const [to, setTo] = useState("2026-12-31");
@@ -92,6 +93,7 @@ export default function ReportsPage() {
     void (async () => {
       try {
         const me = await authApi.me(token);
+        setUser(me);
         if (me.role === "SUPER_ADMIN") {
           router.replace("/companies");
           return;
@@ -153,7 +155,7 @@ export default function ReportsPage() {
     }
   }
 
-  if (loading) {
+  if (loading || !user) {
     return (
       <main className="flex min-h-screen items-center justify-center px-6">
         <p className="text-ss-muted lowercase">loading reports...</p>
@@ -163,25 +165,7 @@ export default function ReportsPage() {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-10">
-      <header className="flex items-center justify-between gap-4">
-        <Link href="/" className="text-sm font-semibold tracking-[0.35em] text-ss-text uppercase">
-          Seesight
-        </Link>
-        <nav className="flex flex-wrap justify-end gap-3">
-          <Link href="/dashboard" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            dashboard
-          </Link>
-          <Link href="/trips" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            trips
-          </Link>
-          <Link href="/approvals" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            approvals
-          </Link>
-          <Link href="/account" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            account
-          </Link>
-        </nav>
-      </header>
+      <AppHeader user={user} />
 
       <section className="mt-12">
         <h1 className="text-3xl font-medium text-ss-text lowercase">reports</h1>
@@ -202,21 +186,11 @@ export default function ReportsPage() {
         >
           <div className="space-y-2">
             <Label className="lowercase text-ss-muted">from</Label>
-            <Input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="h-11 rounded-xl border-white/20 bg-ss-surface-strong text-ss-text"
-            />
+            <DateInput value={from} onChange={setFrom} aria-label="from date" />
           </div>
           <div className="space-y-2">
             <Label className="lowercase text-ss-muted">to</Label>
-            <Input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="h-11 rounded-xl border-white/20 bg-ss-surface-strong text-ss-text"
-            />
+            <DateInput value={to} onChange={setTo} aria-label="to date" />
           </div>
           <div className="flex items-end md:col-span-2 md:justify-end md:gap-2">
             <Button

@@ -184,13 +184,39 @@ describe('Employees (e2e)', () => {
     expect(created.body.temporaryPassword).toBeDefined();
     expect(created.body.departmentName).toContain('Engineering');
 
-    await request(app.getHttpServer())
+    const login = await request(app.getHttpServer())
       .post('/auth/login')
       .send({
         email: `new-hire-${suffix}@example.com`,
         password: created.body.temporaryPassword,
       })
       .expect(200);
+
+    expect(login.body.user.mustChangePassword).toBe(true);
+
+    await request(app.getHttpServer())
+      .get('/trips')
+      .set('Authorization', `Bearer ${login.body.accessToken}`)
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .post('/auth/change-password')
+      .set('Authorization', `Bearer ${login.body.accessToken}`)
+      .send({
+        currentPassword: created.body.temporaryPassword,
+        newPassword: 'EmployeeOwnPass1',
+      })
+      .expect(200);
+
+    const after = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({
+        email: `new-hire-${suffix}@example.com`,
+        password: 'EmployeeOwnPass1',
+      })
+      .expect(200);
+
+    expect(after.body.user.mustChangePassword).toBe(false);
   });
 
   it('lists employees with pagination', async () => {

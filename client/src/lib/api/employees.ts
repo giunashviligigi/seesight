@@ -132,4 +132,11 @@ export const employeesApi = {
       accessToken: authToken(accessToken),
     });
   },
+
+  remove(id: string, accessToken?: string | null) {
+    return apiRequest<Employee>(`/employees/${id}`, {
+      method: "DELETE",
+      accessToken: authToken(accessToken),
+    });
+  },
 };

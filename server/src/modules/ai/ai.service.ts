@@ -34,6 +34,16 @@ import {
   buildUserPrompt,
 } from './prompt';
 import { ruleBasedRecommend } from './rule-based-ranker';
+import {
+  ParseTravelIntentDto,
+  ParseTravelIntentResponseDto,
+} from './dto/parse-travel-intent.dto';
+import {
+  PARSE_TRAVEL_SYSTEM,
+  buildParseTravelPrompt,
+  heuristicParseTravelIntent,
+} from './parse-travel-intent';
+import { resolveCityQuery } from './city-airports';
 
 @Injectable()
 export class AiService {
@@ -192,6 +202,107 @@ export class AiService {
         };
       }),
     };
+  }
+
+  async parseTravelIntent(
+    actor: RequestUser,
+    dto: ParseTravelIntentDto,
+  ): Promise<ParseTravelIntentResponseDto> {
+    this.assertRateLimit(actor.id);
+
+    const reference =
+      dto.referenceDate && !Number.isNaN(Date.parse(dto.referenceDate))
+        ? new Date(dto.referenceDate)
+        : new Date();
+    const referenceIso = toDateString(reference);
+    const fallback = heuristicParseTravelIntent(dto.prompt, reference);
+
+    try {
+      const maxOutputTokens =
+        this.config.get<number>('ai.maxOutputTokens') ?? 1024;
+      const temperature = Math.min(
+        this.config.get<number>('ai.temperature') ?? 0.2,
+        0.1,
+      );
+
+      const generated = await this.aiProvider.generate({
+        systemInstruction: PARSE_TRAVEL_SYSTEM,
+        userPrompt: buildParseTravelPrompt(dto.prompt, referenceIso),
+        maxOutputTokens,
+        temperature,
+      });
+
+      const parsed = this.parseTravelIntentJson(generated.text, fallback);
+      return parsed;
+    } catch (error) {
+      this.logger.warn(
+        `Travel intent parse failed; using heuristic (${error instanceof Error ? error.message : 'unknown'})`,
+      );
+      return fallback;
+    }
+  }
+
+  private parseTravelIntentJson(
+    text: string,
+    fallback: ParseTravelIntentResponseDto,
+  ): ParseTravelIntentResponseDto {
+    let obj: Record<string, unknown>;
+    try {
+      obj = parseJsonObject(text);
+    } catch {
+      return fallback;
+    }
+
+    const originCity =
+      typeof obj.originCity === 'string' ? obj.originCity.trim() : null;
+    const destinationCity =
+      typeof obj.destinationCity === 'string'
+        ? obj.destinationCity.trim()
+        : null;
+
+    const originResolved =
+      (typeof obj.originIata === 'string'
+        ? resolveCityQuery(obj.originIata)
+        : null) ?? (originCity ? resolveCityQuery(originCity) : null);
+    const destinationResolved =
+      (typeof obj.destinationIata === 'string'
+        ? resolveCityQuery(obj.destinationIata)
+        : null) ??
+      (destinationCity ? resolveCityQuery(destinationCity) : null);
+
+    const departureDate = asIsoDate(obj.departureDate) ?? fallback.departureDate;
+    const returnDate = asIsoDate(obj.returnDate) ?? fallback.returnDate;
+    const adults =
+      typeof obj.adults === 'number' &&
+      Number.isFinite(obj.adults) &&
+      obj.adults >= 1 &&
+      obj.adults <= 9
+        ? Math.round(obj.adults)
+        : fallback.adults;
+
+    const notes = Array.isArray(obj.notes)
+      ? obj.notes.filter((n): n is string => typeof n === 'string')
+      : [];
+
+    const result: ParseTravelIntentResponseDto = {
+      originIata: originResolved?.iata ?? fallback.originIata,
+      destinationIata: destinationResolved?.iata ?? fallback.destinationIata,
+      originCity: originResolved?.city ?? originCity ?? fallback.originCity,
+      destinationCity:
+        destinationResolved?.city ??
+        destinationCity ??
+        fallback.destinationCity,
+      departureDate,
+      returnDate,
+      adults,
+      source: 'gemini',
+      notes: notes.length > 0 ? notes : fallback.notes,
+    };
+
+    if (!result.originIata && !result.destinationIata && !result.departureDate) {
+      return fallback;
+    }
+    return result;
   }
 
   private resolveFlights(
@@ -432,6 +543,15 @@ type TripForAi = {
 
 function toDateString(value: Date): string {
   return value.toISOString().slice(0, 10);
+}
+
+function asIsoDate(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
+  const date = new Date(`${trimmed}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return null;
+  return trimmed;
 }
 
 function sanitizePolicy(

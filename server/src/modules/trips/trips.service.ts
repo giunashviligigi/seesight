@@ -16,6 +16,7 @@ import {
   UserStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { parseCountryCode } from '../../common/geo/country';
 import {
   assertCanManageCompany,
   assertCompanyAccess,
@@ -80,7 +81,10 @@ export class TripsService {
     dto: CreateTripDto,
   ): Promise<TripResponseDto> {
     const companyId = resolveTenantCompanyId(actor, dto.companyId);
-    this.assertDateRange(dto.startDate, dto.endDate);
+    const today = toDateString(new Date());
+    const startDate = dto.startDate ?? today;
+    const endDate = dto.endDate ?? startDate;
+    this.assertDateRange(startDate, endDate);
 
     const travelerInputs = this.normalizeTravelers(dto.travelers);
     await this.assertTravelersInCompany(companyId, travelerInputs);
@@ -95,11 +99,11 @@ export class TripsService {
       data: {
         companyId,
         createdByUserId: actor.id,
-        purpose: dto.purpose.trim(),
-        destinationCountry: dto.destinationCountry?.toUpperCase() || null,
+        purpose: (dto.purpose ?? '').trim().slice(0, 200),
+        destinationCountry: parseCountryCode(dto.destinationCountry),
         destinationCity: dto.destinationCity?.trim() || null,
-        startDate: startOfUtcDay(new Date(dto.startDate)),
-        endDate: startOfUtcDay(new Date(dto.endDate)),
+        startDate: startOfUtcDay(new Date(startDate)),
+        endDate: startOfUtcDay(new Date(endDate)),
         budgetAmount:
           dto.budgetAmount === undefined ? null : dto.budgetAmount,
         budgetCurrency: (dto.budgetCurrency || 'EUR').toUpperCase(),
@@ -235,9 +239,7 @@ export class TripsService {
             : {}),
           ...(dto.destinationCountry !== undefined
             ? {
-                destinationCountry: dto.destinationCountry
-                  ? dto.destinationCountry.toUpperCase()
-                  : null,
+                destinationCountry: parseCountryCode(dto.destinationCountry),
               }
             : {}),
           ...(dto.destinationCity !== undefined

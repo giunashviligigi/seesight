@@ -2,20 +2,120 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { authApi, AuthUser, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
 import { tripsApi, Trip } from "@/lib/api/trips";
 import { approvalsApi, ApprovalHistory } from "@/lib/api/approvals";
 import { FlightOffer, HotelOffer } from "@/lib/api/travel";
-import { TripSearchWidget } from "@/components/travel/trip-search-widget";
-import { AskAiPanel } from "@/components/travel/ask-ai-panel";
+import { airportFromCityName, findAirportByIata } from "@/lib/airports";
+import { formatCountryLabel, normalizeCountryInput } from "@/lib/country";
+import { AppHeader, APPROVALS_UPDATED_EVENT } from "@/components/layout/app-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TripSearchWidget } from "@/components/travel/trip-search-widget";
+import {
+  formatFlightClock,
+  formatFlightDateTime,
+} from "@/lib/format-travel";
 
 function formatStatus(status: string) {
   return status.replaceAll("_", " ").toLowerCase();
+}
+
+function SelectedItinerarySummary({ trip }: { trip: Trip }) {
+  const flight = trip.flightOffers?.find((o) => o.selected) ?? null;
+  const hotel = trip.hotelOffers?.find((o) => o.selected) ?? null;
+  const flightPrice = flight?.priceAmount ?? null;
+  const hotelPrice = hotel?.priceAmount ?? null;
+  const currency =
+    flight?.currency || hotel?.currency || trip.budgetCurrency || "EUR";
+  const total =
+    flightPrice == null && hotelPrice == null
+      ? null
+      : (flightPrice ?? 0) + (hotelPrice ?? 0);
+  const originCity = findAirportByIata(flight?.origin)?.city;
+  const destCity = findAirportByIata(flight?.destination)?.city;
+
+  return (
+    <section className="mt-8 rounded-3xl border border-white/10 bg-ss-surface-strong p-5 sm:p-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-medium lowercase text-ss-text">
+            your itinerary
+          </h2>
+          <p className="mt-1 text-sm lowercase text-ss-muted">
+            selected offers for this trip
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-xs lowercase text-ss-muted">estimated total</p>
+          <p className="text-2xl font-medium text-ss-accent">
+            {total != null ? `${total} ${currency}` : "—"}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 text-sm lowercase sm:grid-cols-2">
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+          <p className="text-xs uppercase tracking-wide text-ss-muted">flight</p>
+          {flight ? (
+            <div className="mt-2 space-y-1">
+              <p className="text-base text-ss-text">
+                {originCity ? `${originCity} (${flight.origin})` : flight.origin}{" "}
+                →{" "}
+                {destCity
+                  ? `${destCity} (${flight.destination})`
+                  : flight.destination}
+              </p>
+              <p className="text-ss-muted">
+                depart {formatFlightClock(flight.departAt)}
+                {flight.departAt
+                  ? ` · ${formatFlightDateTime(flight.departAt)}`
+                  : ""}
+              </p>
+              <p className="pt-1 font-medium text-ss-text">
+                {flightPrice != null
+                  ? `${flightPrice} ${flight.currency ?? currency}`
+                  : "price n/a"}
+              </p>
+            </div>
+          ) : (
+            <p className="mt-2 text-ss-muted">none selected yet</p>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+          <p className="text-xs uppercase tracking-wide text-ss-muted">hotel</p>
+          {hotel ? (
+            <div className="mt-2 space-y-1">
+              <p className="text-base text-ss-text">{hotel.hotelName}</p>
+              <p className="text-ss-muted">
+                {hotel.city ?? "—"}
+                {hotel.checkIn && hotel.checkOut
+                  ? ` · ${hotel.checkIn} → ${hotel.checkOut}`
+                  : ""}
+              </p>
+              <p className="pt-1 font-medium text-ss-text">
+                {hotelPrice != null
+                  ? `${hotelPrice} ${hotel.currency ?? currency}`
+                  : "price n/a"}
+              </p>
+            </div>
+          ) : (
+            <p className="mt-2 text-ss-muted">none selected yet</p>
+          )}
+        </div>
+      </div>
+
+      {flight && hotel && total != null ? (
+        <p className="mt-4 text-xs lowercase text-ss-muted">
+          flight {flightPrice ?? 0} + hotel {hotelPrice ?? 0} = {total} {currency}
+        </p>
+      ) : null}
+    </section>
+  );
 }
 
 const EDITABLE = new Set(["DRAFT", "REJECTED"]);
@@ -30,12 +130,6 @@ export default function TripDetailPage() {
   const [history, setHistory] = useState<ApprovalHistory | null>(null);
   const [decisionComment, setDecisionComment] = useState("");
   const [purpose, setPurpose] = useState("");
-  const [destinationCountry, setDestinationCountry] = useState("");
-  const [destinationCity, setDestinationCity] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [budgetAmount, setBudgetAmount] = useState("");
-  const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,17 +137,9 @@ export default function TripDetailPage() {
 
   function applyTrip(next: Trip) {
     setTrip(next);
-    setPurpose(next.purpose);
-    setDestinationCountry(next.destinationCountry ?? "");
-    setDestinationCity(next.destinationCity ?? "");
-    setStartDate(next.startDate);
-    setEndDate(next.endDate);
-    setBudgetAmount(
-      next.budgetAmount === null || next.budgetAmount === undefined
-        ? ""
-        : String(next.budgetAmount),
+    setPurpose(
+      !next.purpose || next.purpose === "New trip" ? "" : next.purpose,
     );
-    setNotes(next.notes ?? "");
   }
 
   useEffect(() => {
@@ -112,6 +198,13 @@ export default function TripDetailPage() {
           // history optional
         }
       }
+      if (
+        success.includes("submitted") ||
+        success.includes("approved") ||
+        success.includes("rejected")
+      ) {
+        window.dispatchEvent(new Event(APPROVALS_UPDATED_EVENT));
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Action failed");
     } finally {
@@ -119,27 +212,59 @@ export default function TripDetailPage() {
     }
   }
 
-  async function onSave(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function persistPurposeIfNeeded(token: string) {
+    if (!trip) return trip;
+    const nextPurpose = purpose.trim();
+    const current =
+      !trip.purpose || trip.purpose === "New trip" ? "" : trip.purpose;
+    if (nextPurpose === current) return trip;
+    const next = await tripsApi.update(
+      trip.id,
+      { purpose: nextPurpose },
+      token,
+    );
+    applyTrip(next);
+    return next;
+  }
+
+  async function syncCriteriaFromSearch(criteria: {
+    destinationCity: string;
+    destinationCountry: string | null;
+    depart: string;
+    returnDate: string;
+  }) {
     const token = getStoredAccessToken();
     if (!token || !trip) return;
-    await runAction(
-      () =>
-        tripsApi.update(
-          trip.id,
-          {
-            purpose,
-            destinationCountry: destinationCountry || null,
-            destinationCity: destinationCity || null,
-            startDate,
-            endDate,
-            budgetAmount: budgetAmount ? Number(budgetAmount) : null,
-            notes: notes || null,
-          },
-          token,
-        ),
-      "trip updated.",
-    );
+    let countryCode: string | null = trip.destinationCountry;
+    if (criteria.destinationCountry) {
+      try {
+        countryCode =
+          normalizeCountryInput(criteria.destinationCountry) || null;
+      } catch {
+        countryCode = trip.destinationCountry;
+      }
+    }
+    const endDate = criteria.returnDate || criteria.depart;
+    try {
+      const next = await tripsApi.update(
+        trip.id,
+        {
+          purpose: purpose.trim(),
+          destinationCity: criteria.destinationCity || null,
+          destinationCountry: countryCode,
+          startDate: criteria.depart,
+          endDate,
+        },
+        token,
+      );
+      applyTrip(next);
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Unable to sync trip details from search",
+      );
+    }
   }
 
   if (loading) {
@@ -150,7 +275,7 @@ export default function TripDetailPage() {
     );
   }
 
-  if (!trip) {
+  if (!trip || !user) {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-6 py-10">
         <p className="text-ss-muted lowercase">{error ?? "trip not found"}</p>
@@ -161,39 +286,52 @@ export default function TripDetailPage() {
     );
   }
 
-  const isAdmin = user?.role === "COMPANY_ADMIN";
+  const isAdmin = user.role === "COMPANY_ADMIN";
   const canEdit = EDITABLE.has(trip.status);
   const token = getStoredAccessToken();
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-10">
-      <header className="flex items-center justify-between">
-        <Link href="/" className="text-sm font-semibold tracking-[0.35em] text-ss-text uppercase">
-          Seesight
-        </Link>
-        <nav className="flex gap-3">
-          <Link href="/trips" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            trips
-          </Link>
-          {isAdmin ? (
-            <Link href="/approvals" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-              approvals
-            </Link>
-          ) : null}
-          <Link href="/notifications" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            notifications
-          </Link>
-        </nav>
-      </header>
+      <AppHeader user={user} />
 
       <section className="mt-12 rounded-3xl border border-white/15 bg-ss-surface p-8">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-medium text-ss-text lowercase">{trip.purpose}</h1>
-            <p className="mt-2 text-sm text-ss-muted lowercase">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm text-ss-muted lowercase">
               status: {formatStatus(trip.status)}
               {trip.approval
                 ? ` · approval ${formatStatus(trip.approval.status)}`
+                : ""}
+            </p>
+            {canEdit ? (
+              <div className="mt-3 space-y-2">
+                <Label className="lowercase text-ss-muted">purpose of trip</Label>
+                <Input
+                  value={purpose}
+                  onChange={(e) => setPurpose(e.target.value)}
+                  placeholder="e.g. client workshop in berlin"
+                  disabled={busy}
+                  className="h-11 rounded-xl border-white/20 bg-ss-surface-strong text-ss-text"
+                />
+              </div>
+            ) : (
+              <h1 className="mt-2 text-3xl font-medium text-ss-text lowercase">
+                {trip.purpose || "untitled trip"}
+              </h1>
+            )}
+            <p className="mt-3 text-sm lowercase text-ss-muted">
+              {[
+                trip.destinationCity,
+                formatCountryLabel(trip.destinationCountry) || null,
+              ]
+                .filter(Boolean)
+                .join(", ") || "destination from search"}
+              {" · "}
+              {trip.destinationCity
+                ? `${trip.startDate} → ${trip.endDate}`
+                : "dates from search"}
+              {trip.budgetAmount != null
+                ? ` · budget ${trip.budgetAmount} ${trip.budgetCurrency}`
                 : ""}
             </p>
           </div>
@@ -213,10 +351,10 @@ export default function TripDetailPage() {
             <Button
               disabled={busy}
               onClick={() =>
-                void runAction(
-                  () => tripsApi.submit(trip.id, token),
-                  "submitted for approval.",
-                )
+                void runAction(async () => {
+                  await persistPurposeIfNeeded(token);
+                  return tripsApi.submit(trip.id, token);
+                }, "submitted for approval.")
               }
               className="rounded-full bg-ss-accent px-4 text-white lowercase hover:bg-ss-accent-hover"
             >
@@ -372,47 +510,29 @@ export default function TripDetailPage() {
           </div>
         ) : null}
 
-        <div className="mt-8 grid gap-4 text-sm lowercase sm:grid-cols-2">
-          <div className="rounded-2xl border border-white/10 bg-ss-surface-strong p-4">
-            <p className="text-ss-muted">selected flight</p>
-            {trip.flightOffers?.find((o) => o.selected) ? (
-              <p className="mt-2 text-ss-text">
-                {trip.flightOffers.find((o) => o.selected)?.origin} →{" "}
-                {trip.flightOffers.find((o) => o.selected)?.destination}
-                {" · "}
-                {trip.flightOffers.find((o) => o.selected)?.priceAmount ?? "—"}{" "}
-                {trip.flightOffers.find((o) => o.selected)?.currency}
-              </p>
-            ) : (
-              <p className="mt-2 text-ss-muted">none selected</p>
-            )}
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-ss-surface-strong p-4">
-            <p className="text-ss-muted">selected hotel</p>
-            {trip.hotelOffers?.find((o) => o.selected) ? (
-              <p className="mt-2 text-ss-text">
-                {trip.hotelOffers.find((o) => o.selected)?.hotelName}
-                {" · "}
-                {trip.hotelOffers.find((o) => o.selected)?.priceAmount ?? "—"}{" "}
-                {trip.hotelOffers.find((o) => o.selected)?.currency}
-              </p>
-            ) : (
-              <p className="mt-2 text-ss-muted">none selected</p>
-            )}
-          </div>
-        </div>
+        <SelectedItinerarySummary trip={trip} />
 
         {canEdit && token ? (
           <div className="mt-10 border-t border-white/10 pt-8">
             <TripSearchWidget
+              tripId={trip.id}
               accessToken={token}
               defaultOrigin=""
-              defaultDestination=""
+              defaultDestination={
+                airportFromCityName(trip.destinationCity)?.iata ?? ""
+              }
               defaultCity={trip.destinationCity ?? ""}
-              defaultDepart={trip.startDate}
-              defaultReturn={trip.endDate}
+              defaultDepart={trip.destinationCity ? trip.startDate : ""}
+              defaultReturn={
+                trip.destinationCity && trip.endDate !== trip.startDate
+                  ? trip.endDate
+                  : ""
+              }
               currency={trip.budgetCurrency}
               disabled={busy}
+              onCriteriaChange={async (criteria) => {
+                await syncCriteriaFromSearch(criteria);
+              }}
               onSelectFlight={async (offer: FlightOffer) => {
                 const next = await tripsApi.attachFlightOffer(
                   trip.id,
@@ -430,6 +550,7 @@ export default function TripDetailPage() {
                   token,
                 );
                 applyTrip(next);
+                setMessage("flight attached — see your itinerary summary above");
               }}
               onSelectHotel={async (offer: HotelOffer) => {
                 const next = await tripsApi.attachHotelOffer(
@@ -447,103 +568,10 @@ export default function TripDetailPage() {
                   token,
                 );
                 applyTrip(next);
+                setMessage("hotel attached — see your itinerary summary above");
               }}
             />
           </div>
-        ) : null}
-
-        {token ? (
-          <AskAiPanel
-            tripId={trip.id}
-            accessToken={token}
-            hasOffers={
-              (trip.flightOffers?.length ?? 0) > 0 ||
-              (trip.hotelOffers?.length ?? 0) > 0
-            }
-            disabled={busy}
-          />
-        ) : null}
-
-        {canEdit ? (
-          <form className="mt-8 space-y-5" onSubmit={onSave}>
-            <h2 className="text-lg font-medium text-ss-text lowercase">edit trip</h2>
-            <div className="space-y-2">
-              <Label className="lowercase text-ss-muted">purpose</Label>
-              <Input
-                required
-                value={purpose}
-                onChange={(e) => setPurpose(e.target.value)}
-                className="h-11 rounded-xl border-white/20 bg-ss-surface-strong text-ss-text"
-              />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="lowercase text-ss-muted">country</Label>
-                <Input
-                  maxLength={2}
-                  value={destinationCountry}
-                  onChange={(e) => setDestinationCountry(e.target.value)}
-                  className="h-11 rounded-xl border-white/20 bg-ss-surface-strong text-ss-text"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="lowercase text-ss-muted">city</Label>
-                <Input
-                  value={destinationCity}
-                  onChange={(e) => setDestinationCity(e.target.value)}
-                  className="h-11 rounded-xl border-white/20 bg-ss-surface-strong text-ss-text"
-                />
-              </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="lowercase text-ss-muted">start date</Label>
-                <Input
-                  required
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="h-11 rounded-xl border-white/20 bg-ss-surface-strong text-ss-text"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="lowercase text-ss-muted">end date</Label>
-                <Input
-                  required
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="h-11 rounded-xl border-white/20 bg-ss-surface-strong text-ss-text"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label className="lowercase text-ss-muted">budget</Label>
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                value={budgetAmount}
-                onChange={(e) => setBudgetAmount(e.target.value)}
-                className="h-11 rounded-xl border-white/20 bg-ss-surface-strong text-ss-text"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="lowercase text-ss-muted">notes</Label>
-              <Input
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="h-11 rounded-xl border-white/20 bg-ss-surface-strong text-ss-text"
-              />
-            </div>
-            <Button
-              type="submit"
-              disabled={busy}
-              className="rounded-full bg-ss-accent px-6 text-white lowercase hover:bg-ss-accent-hover"
-            >
-              save changes
-            </Button>
-          </form>
         ) : (
           <dl className="mt-8 grid gap-4 text-sm lowercase sm:grid-cols-2">
             <div>
@@ -561,7 +589,7 @@ export default function TripDetailPage() {
             <div>
               <dt className="text-ss-muted">destination</dt>
               <dd className="mt-1 text-ss-text">
-                {[trip.destinationCity, trip.destinationCountry]
+                {[trip.destinationCity, formatCountryLabel(trip.destinationCountry)]
                   .filter(Boolean)
                   .join(", ") || "—"}
               </dd>

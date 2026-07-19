@@ -25,7 +25,13 @@ export default function LoginPage() {
     try {
       const result = await authApi.login({ email, password });
       storeAccessToken(result.accessToken);
-      router.push("/account");
+      if (result.user.mustChangePassword) {
+        router.push("/change-password");
+      } else if (result.user.role === "SUPER_ADMIN") {
+        router.push("/companies");
+      } else {
+        router.push("/dashboard");
+      }
       router.refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Unable to log in");

@@ -10,6 +10,7 @@ import {
   toMonthKey,
   tripSelectedSpend,
 } from '../../common/analytics/spend.utils';
+import { toCountryName } from '../../common/geo/country';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { resolveTenantCompanyId } from '../../common/tenant/tenant.utils';
 import { RequestUser } from '../auth/types/auth.types';
@@ -304,7 +305,7 @@ export class ReportsService {
       ),
       topCountries: [...countryMap.entries()]
         .map(([country, tripCount]) => ({
-          label: country,
+          label: toCountryName(country) ?? country,
           country,
           city: null,
           tripCount,
@@ -312,12 +313,17 @@ export class ReportsService {
         .sort((a, b) => b.tripCount - a.tripCount || a.label.localeCompare(b.label))
         .slice(0, 10),
       topCities: [...cityMap.values()]
-        .map((row) => ({
-          label: row.country ? `${row.city}, ${row.country}` : row.city,
-          country: row.country,
-          city: row.city,
-          tripCount: row.tripCount,
-        }))
+        .map((row) => {
+          const countryLabel = row.country
+            ? (toCountryName(row.country) ?? row.country)
+            : null;
+          return {
+            label: countryLabel ? `${row.city}, ${countryLabel}` : row.city,
+            country: row.country,
+            city: row.city,
+            tripCount: row.tripCount,
+          };
+        })
         .sort((a, b) => b.tripCount - a.tripCount || a.label.localeCompare(b.label))
         .slice(0, 10),
       maxRangeMonths: MAX_RANGE_MONTHS,

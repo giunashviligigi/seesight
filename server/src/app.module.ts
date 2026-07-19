@@ -16,8 +16,10 @@ import { AiModule } from './modules/ai/ai.module';
 import { ApprovalsModule } from './modules/approvals/approvals.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { UsersModule } from './modules/users/users.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
+import { MustChangePasswordGuard } from './modules/auth/guards/must-change-password.guard';
 
 @Module({
   imports: [
@@ -39,6 +41,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     NotificationsModule,
     ApprovalsModule,
     ReportsModule,
+    UsersModule,
   ],
   providers: [
     {
@@ -48,6 +51,10 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: MustChangePasswordGuard,
     },
   ],
 })

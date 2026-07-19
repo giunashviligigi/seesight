@@ -74,19 +74,23 @@ export function ruleBasedRecommend(
 
   const reasoningParts: string[] = [];
   if (cheapestFlight) {
+    const label =
+      cheapestFlight.summary ||
+      `${cheapestFlight.airline ?? 'flight'} ${cheapestFlight.origin ?? ''}→${cheapestFlight.destination ?? ''}`.trim();
     reasoningParts.push(
-      `Selected flight ${cheapestFlight.id} as the lowest-priced option` +
+      `Selected the lowest-priced flight (${label})` +
         (cheapestFlight.priceAmount != null
-          ? ` (${cheapestFlight.priceAmount} ${cheapestFlight.currency ?? currency})`
+          ? ` at ${cheapestFlight.priceAmount} ${cheapestFlight.currency ?? currency}`
           : '') +
         '.',
     );
   }
   if (cheapestHotel) {
+    const label = cheapestHotel.summary || cheapestHotel.hotelName;
     reasoningParts.push(
-      `Selected hotel ${cheapestHotel.id} (${cheapestHotel.hotelName}) as the lowest-priced stay` +
+      `Selected the lowest-priced hotel (${label})` +
         (cheapestHotel.priceAmount != null
-          ? ` (${cheapestHotel.priceAmount} ${cheapestHotel.currency ?? currency})`
+          ? ` at ${cheapestHotel.priceAmount} ${cheapestHotel.currency ?? currency}`
           : '') +
         '.',
     );
@@ -103,7 +107,9 @@ export function ruleBasedRecommend(
     cheapestFlight &&
     shortestFlight.id !== cheapestFlight.id
   ) {
-    tradeoffs = `Cheapest flight ${cheapestFlight.id} vs shortest flight ${shortestFlight.id}.`;
+    const cheapLabel = cheapestFlight.summary || cheapestFlight.id;
+    const shortLabel = shortestFlight.summary || shortestFlight.id;
+    tradeoffs = `Cheapest flight (${cheapLabel}) vs shortest flight (${shortLabel}).`;
   }
 
   return {

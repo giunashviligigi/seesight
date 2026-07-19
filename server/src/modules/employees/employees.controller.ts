@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -115,5 +116,19 @@ export class EmployeesController {
     @Param('id') id: string,
   ): Promise<EmployeeResponseDto> {
     return this.employeesService.activate(user, id);
+  }
+
+  @Delete(':id')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN)
+  @ApiOperation({
+    summary:
+      'Remove employee from roster (soft delete) and disable linked login; trip history kept',
+  })
+  @ApiOkResponse({ type: EmployeeResponseDto })
+  remove(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+  ): Promise<EmployeeResponseDto> {
+    return this.employeesService.remove(user, id);
   }
 }

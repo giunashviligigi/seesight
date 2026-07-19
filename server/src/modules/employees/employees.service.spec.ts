@@ -7,6 +7,7 @@ import {
 import { UserRole, UserStatus } from '@prisma/client';
 import { EmployeesService } from './employees.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { RequestUser } from '../auth/types/auth.types';
 
 describe('EmployeesService', () => {
@@ -29,6 +30,7 @@ describe('EmployeesService', () => {
     };
     $transaction: jest.Mock;
   };
+  let notifications: { create: jest.Mock; createMany: jest.Mock };
 
   const adminA: RequestUser = {
     id: 'user_a',
@@ -38,6 +40,7 @@ describe('EmployeesService', () => {
     companyId: 'company_a',
     firstName: 'Ada',
     lastName: 'Admin',
+    mustChangePassword: false,
     createdAt: new Date(),
   };
 
@@ -103,10 +106,16 @@ describe('EmployeesService', () => {
       }),
     };
 
+    notifications = {
+      create: jest.fn(),
+      createMany: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         EmployeesService,
         { provide: PrismaService, useValue: prisma },
+        { provide: NotificationsService, useValue: notifications },
       ],
     }).compile();
 

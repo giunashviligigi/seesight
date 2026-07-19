@@ -83,6 +83,8 @@ Open [http://localhost:3000](http://localhost:3000)
 docker compose -f docker/docker-compose.yml up --build
 ```
 
+Put `SERPAPI_API_KEY` and `GEMINI_API_KEY` in `server/.env`. The API container loads that file (`env_file`); `DATABASE_URL` is still overridden for the Compose network.
+
 - Web: http://localhost:3000  
 - API: http://localhost:3001/health  
 - Postgres: localhost:5432  

@@ -22,7 +22,7 @@ export class ShortlistFlightOfferDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  @MaxLength(200)
+  @MaxLength(120)
   providerOfferId?: string;
 
   @ApiPropertyOptional({ example: 'TBS' })
@@ -93,7 +93,7 @@ export class ShortlistHotelOfferDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  @MaxLength(200)
+  @MaxLength(120)
   providerOfferId?: string;
 
   @ApiProperty()

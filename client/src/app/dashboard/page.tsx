@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { authApi, AuthUser, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
 import { dashboardApi, DashboardSummary } from "@/lib/api/dashboard";
+import { formatCountryLabel } from "@/lib/country";
+import { AppHeader } from "@/components/layout/app-header";
 
 function formatMoney(amount: number, currency: string) {
   try {
@@ -20,7 +22,10 @@ function formatMoney(amount: number, currency: string) {
 }
 
 function destinationLabel(trip: DashboardSummary["upcomingTrips"][number]) {
-  const parts = [trip.destinationCity, trip.destinationCountry].filter(Boolean);
+  const parts = [
+    trip.destinationCity,
+    formatCountryLabel(trip.destinationCountry) || null,
+  ].filter(Boolean);
   return parts.length > 0 ? parts.join(", ") : "destination TBD";
 }
 
@@ -84,48 +89,17 @@ export default function DashboardPage() {
     summary.totalTravelSpending.amount === 0 &&
     summary.statistics.tripsThisMonth === 0;
 
+  if (!user) {
+    return (
+      <main className="flex min-h-screen items-center justify-center px-6">
+        <p className="text-ss-muted lowercase">{error ?? "redirecting..."}</p>
+      </main>
+    );
+  }
+
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-10">
-      <header className="flex items-center justify-between gap-4">
-        <Link href="/" className="text-sm font-semibold tracking-[0.35em] text-ss-text uppercase">
-          Seesight
-        </Link>
-        <nav className="flex flex-wrap items-center justify-end gap-3">
-          <Link href="/trips" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            trips
-          </Link>
-          {!isEmployee ? (
-            <Link href="/approvals" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-              approvals
-            </Link>
-          ) : null}
-          {!isEmployee ? (
-            <Link href="/reports" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-              reports
-            </Link>
-          ) : null}
-          <Link href="/notifications" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            notifications
-          </Link>
-          {isEmployee ? (
-            <Link href="/profile" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-              profile
-            </Link>
-          ) : (
-            <>
-              <Link href="/employees" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-                employees
-              </Link>
-              <Link href="/company" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-                company
-              </Link>
-            </>
-          )}
-          <Link href="/account" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            account
-          </Link>
-        </nav>
-      </header>
+      <AppHeader user={user} />
 
       <section className="mt-12">
         <h1 className="text-3xl font-medium text-ss-text lowercase">dashboard</h1>

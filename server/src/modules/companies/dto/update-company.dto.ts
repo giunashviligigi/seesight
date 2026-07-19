@@ -22,10 +22,13 @@ export class UpdateCompanyDto {
   @MaxLength(160)
   legalName?: string | null;
 
-  @ApiPropertyOptional({ example: 'GE' })
+  @ApiPropertyOptional({
+    example: 'Georgia',
+    description: 'Full country name or ISO 3166-1 alpha-2 code (stored as ISO).',
+  })
   @IsOptional()
   @IsString()
-  @MaxLength(2)
+  @MaxLength(100)
   country?: string | null;
 
   @ApiPropertyOptional({ example: 'billing@acme-travel.example' })
@@ -40,7 +43,7 @@ export class UpdateCompanyDto {
   timezone?: string;
 
   @ApiPropertyOptional({
-    example: { defaultBudgetLimit: 2500, currency: 'EUR' },
+    example: { defaultBudgetLimit: 2500, defaultBudgetCurrency: 'GEL' },
   })
   @IsOptional()
   @IsObject()

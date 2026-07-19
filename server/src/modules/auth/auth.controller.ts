@@ -21,6 +21,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import {
   AuthTokensResponseDto,
   ForgotPasswordResponseDto,
@@ -100,6 +101,22 @@ export class AuthController {
   @ApiOkResponse({ type: MessageResponseDto })
   resetPassword(@Body() dto: ResetPasswordDto): Promise<MessageResponseDto> {
     return this.authService.resetPassword(dto);
+  }
+
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiCookieAuth()
+  @ApiOperation({
+    summary:
+      'Change password while authenticated (required after temporary first login)',
+  })
+  @ApiOkResponse({ type: MessageResponseDto })
+  changePassword(
+    @CurrentUser() user: RequestUser,
+    @Body() dto: ChangePasswordDto,
+  ): Promise<MessageResponseDto> {
+    return this.authService.changePassword(user, dto);
   }
 
   @Get('me')

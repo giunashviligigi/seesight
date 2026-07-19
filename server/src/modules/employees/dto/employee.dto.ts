@@ -49,10 +49,13 @@ export class CreateEmployeeDto {
   @IsString()
   departmentId?: string;
 
-  @ApiPropertyOptional({ example: 'GE' })
+  @ApiPropertyOptional({
+    example: 'Georgia',
+    description: 'Full nationality name or ISO 3166-1 alpha-2 code (stored as ISO).',
+  })
   @IsOptional()
   @IsString()
-  @MaxLength(2)
+  @MaxLength(100)
   nationality?: string;
 
   @ApiPropertyOptional()
@@ -117,10 +120,13 @@ export class UpdateEmployeeDto {
   @IsString()
   departmentId?: string | null;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: 'Georgia',
+    description: 'Full nationality name or ISO 3166-1 alpha-2 code (stored as ISO).',
+  })
   @IsOptional()
   @IsString()
-  @MaxLength(2)
+  @MaxLength(100)
   nationality?: string | null;
 
   @ApiPropertyOptional()

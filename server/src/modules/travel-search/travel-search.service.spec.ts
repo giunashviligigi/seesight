@@ -94,7 +94,12 @@ describe('TravelSearchService', () => {
       priceAmount: 420,
       currency: 'EUR',
       airline: 'Lufthansa',
+      arriveAt: expect.any(String),
+      departAt: expect.any(String),
+      totalDurationMinutes: 160,
     });
+    expect(result.items[0].arriveAt).toContain('2026-09-10');
+    expect(result.items[0].departAt).toContain('2026-09-10');
     expect(result.items[0].rawPayload).toHaveProperty(
       'source',
       'serpapi_google_flights',
@@ -147,7 +152,15 @@ describe('TravelSearchService', () => {
           overall_rating: 4.5,
           total_rate: { extracted_lowest: 480 },
           amenities: ['Wi-Fi', 'Pool'],
-          images: [{ thumbnail: 'https://example.com/t.jpg' }],
+          description: 'Central location near the station',
+          address: '1 Mitte Street',
+          images: [
+            {
+              thumbnail: 'https://example.com/t.jpg',
+              original_image: 'https://example.com/o.jpg',
+            },
+            { thumbnail: 'https://example.com/t2.jpg' },
+          ],
         },
       ],
     });
@@ -166,6 +179,13 @@ describe('TravelSearchService', () => {
       city: 'Berlin',
       priceAmount: 480,
       stars: 4,
+      description: 'Central location near the station',
+      address: '1 Mitte Street',
+      images: [
+        'https://example.com/o.jpg',
+        'https://example.com/t2.jpg',
+      ],
+      thumbnail: 'https://example.com/o.jpg',
     });
   });
 

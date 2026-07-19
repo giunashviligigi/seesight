@@ -12,6 +12,7 @@ import {
   UserStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { parseCountryCode } from '../../common/geo/country';
 import {
   assertCanManageCompany,
   assertCompanyAccess,
@@ -52,7 +53,7 @@ export class CompaniesService {
           name: dto.name.trim(),
           legalName: dto.legalName?.trim() || null,
           slug,
-          country: dto.country?.toUpperCase() || null,
+          country: parseCountryCode(dto.country),
           billingEmail: dto.billingEmail?.toLowerCase().trim() || null,
           timezone: dto.timezone?.trim() || 'UTC',
           policyJson: (dto.policyJson as Prisma.InputJsonValue) ?? undefined,
@@ -111,8 +112,32 @@ export class CompaniesService {
       }),
     ]);
 
+    const companyIds = items.map((item) => item.id);
+    const admins =
+      companyIds.length === 0
+        ? []
+        : await this.prisma.user.findMany({
+            where: {
+              companyId: { in: companyIds },
+              role: UserRole.COMPANY_ADMIN,
+              status: UserStatus.ACTIVE,
+            },
+            select: { companyId: true, email: true },
+            orderBy: { email: 'asc' },
+          });
+
+    const adminsByCompany = new Map<string, string[]>();
+    for (const admin of admins) {
+      if (!admin.companyId) continue;
+      const list = adminsByCompany.get(admin.companyId) ?? [];
+      list.push(admin.email);
+      adminsByCompany.set(admin.companyId, list);
+    }
+
     return {
-      items: items.map((item) => this.toResponse(item)),
+      items: items.map((item) =>
+        this.toResponse(item, adminsByCompany.get(item.id) ?? []),
+      ),
       total,
       page,
       pageSize,
@@ -178,7 +203,7 @@ export class CompaniesService {
         country:
           dto.country === undefined
             ? undefined
-            : dto.country?.toUpperCase() || null,
+            : parseCountryCode(dto.country),
         billingEmail:
           dto.billingEmail === undefined
             ? undefined
@@ -247,6 +272,33 @@ export class CompaniesService {
     return this.toResponse(company);
   }
 
+  async remove(
+    actor: RequestUser,
+    companyId: string,
+  ): Promise<CompanyResponseDto> {
+    if (!isSuperAdmin(actor)) {
+      throw new ForbiddenException('Only super admins can remove companies');
+    }
+
+    const existing = await this.prisma.company.findFirst({
+      where: { id: companyId, deletedAt: null },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Company not found');
+    }
+
+    const company = await this.prisma.company.update({
+      where: { id: companyId },
+      data: {
+        status: CompanyStatus.INACTIVE,
+        deletedAt: new Date(),
+      },
+    });
+
+    return this.toResponse(company);
+  }
+
   async assignAdmin(
     actor: RequestUser,
     companyId: string,
@@ -281,13 +333,17 @@ export class CompaniesService {
 
     await this.prisma.$transaction(async (tx) => {
       if (dto.replaceExisting) {
+        // Previous company admins lose the company so they show as unassigned again.
         await tx.user.updateMany({
           where: {
             companyId,
             role: UserRole.COMPANY_ADMIN,
             id: { not: user.id },
           },
-          data: { role: UserRole.EMPLOYEE },
+          data: {
+            companyId: null,
+            role: UserRole.COMPANY_ADMIN,
+          },
         });
       }
 
@@ -354,7 +410,10 @@ export class CompaniesService {
     }
   }
 
-  private toResponse(company: Company): CompanyResponseDto {
+  private toResponse(
+    company: Company,
+    adminEmails: string[] = [],
+  ): CompanyResponseDto {
     return {
       id: company.id,
       name: company.name,
@@ -362,6 +421,7 @@ export class CompaniesService {
       slug: company.slug,
       country: company.country,
       billingEmail: company.billingEmail,
+      adminEmails,
       timezone: company.timezone,
       status: company.status,
       policyJson:

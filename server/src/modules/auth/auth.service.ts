@@ -14,6 +14,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import {
   AuthTokensResponseDto,
   ForgotPasswordResponseDto,
@@ -168,7 +169,7 @@ export class AuthService {
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: record.userId },
-        data: { passwordHash },
+        data: { passwordHash, mustChangePassword: false },
       }),
       this.prisma.passwordResetToken.update({
         where: { id: record.id },
@@ -177,6 +178,44 @@ export class AuthService {
     ]);
 
     return { message: 'Password has been reset successfully' };
+  }
+
+  async changePassword(
+    user: RequestUser,
+    dto: ChangePasswordDto,
+  ): Promise<MessageResponseDto> {
+    const current = await this.prisma.user.findUnique({
+      where: { id: user.id },
+    });
+
+    if (!current || current.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException('Authentication required');
+    }
+
+    const matches = await bcrypt.compare(
+      dto.currentPassword,
+      current.passwordHash,
+    );
+    if (!matches) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    if (dto.currentPassword === dto.newPassword) {
+      throw new BadRequestException(
+        'New password must be different from the current password',
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, BCRYPT_ROUNDS);
+    await this.prisma.user.update({
+      where: { id: current.id },
+      data: {
+        passwordHash,
+        mustChangePassword: false,
+      },
+    });
+
+    return { message: 'Password updated successfully' };
   }
 
   private async signAccessToken(

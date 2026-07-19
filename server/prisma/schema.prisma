@@ -54,6 +54,7 @@ enum NotificationType {
   TRIP_SUBMITTED
   TRIP_APPROVED
   TRIP_REJECTED
+  EMPLOYEE_TEMP_PASSWORD
 }
 
 enum TravelClass {
@@ -100,17 +101,19 @@ model Company {
 }
 
 model User {
-  id           String     @id @default(cuid())
-  email        String     @unique
-  passwordHash String
-  firstName    String?
-  lastName     String?
-  role         UserRole   @default(COMPANY_ADMIN)
-  status       UserStatus @default(ACTIVE)
-  companyId    String?
-  company      Company?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id                 String     @id @default(cuid())
+  email              String     @unique
+  passwordHash       String
+  firstName          String?
+  lastName           String?
+  role               UserRole   @default(COMPANY_ADMIN)
+  status             UserStatus @default(ACTIVE)
+  /// True when account was provisioned with a temporary password (first login must set a new one).
+  mustChangePassword Boolean    @default(false)
+  companyId          String?
+  company            Company?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
 
   passwordResetTokens PasswordResetToken[]
   employeeProfile     Employee?

@@ -39,6 +39,25 @@ export class NotificationsService {
     });
   }
 
+  async create(input: {
+    userId: string;
+    type: NotificationType;
+    title: string;
+    body?: string | null;
+    tripId?: string | null;
+  }): Promise<NotificationResponseDto> {
+    const notification = await this.prisma.notification.create({
+      data: {
+        userId: input.userId,
+        type: input.type,
+        title: input.title,
+        body: input.body ?? null,
+        tripId: input.tripId ?? null,
+      },
+    });
+    return this.toResponse(notification);
+  }
+
   async list(
     actor: RequestUser,
     query: ListNotificationsQueryDto,

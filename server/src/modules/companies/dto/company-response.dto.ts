@@ -20,6 +20,12 @@ export class CompanyResponseDto {
   @ApiPropertyOptional()
   billingEmail!: string | null;
 
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Company admin login emails (who manages the tenant)',
+  })
+  adminEmails?: string[];
+
   @ApiProperty()
   timezone!: string;
 

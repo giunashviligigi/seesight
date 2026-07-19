@@ -19,8 +19,38 @@ export class FlightOfferDto {
   @ApiPropertyOptional({ nullable: true, type: String, format: 'date-time' })
   departAt!: string | null;
 
+  @ApiPropertyOptional({
+    nullable: true,
+    type: String,
+    format: 'date-time',
+    description: 'Arrival time at final destination',
+  })
+  arriveAt!: string | null;
+
   @ApiPropertyOptional({ nullable: true, type: String, format: 'date-time' })
   returnAt!: string | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    type: String,
+    format: 'date-time',
+    description: 'Return leg departure time (round trip)',
+  })
+  returnDepartAt!: string | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    type: String,
+    format: 'date-time',
+    description: 'Return leg arrival time (round trip)',
+  })
+  returnArriveAt!: string | null;
+
+  @ApiProperty({
+    enum: ['one_way', 'round_trip'],
+    description: 'Whether this offer is one-way or round-trip',
+  })
+  tripType!: 'one_way' | 'round_trip';
 
   @ApiPropertyOptional({ nullable: true, type: String })
   airline!: string | null;
@@ -33,6 +63,20 @@ export class FlightOfferDto {
 
   @ApiPropertyOptional({ nullable: true, type: Number })
   totalDurationMinutes!: number | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    type: Number,
+    description: 'Outbound leg duration in minutes',
+  })
+  outboundDurationMinutes!: number | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    type: Number,
+    description: 'Return leg duration in minutes (round trip)',
+  })
+  returnDurationMinutes!: number | null;
 
   @ApiPropertyOptional({ nullable: true, type: String })
   travelClass!: string | null;
@@ -89,6 +133,15 @@ export class HotelOfferDto {
 
   @ApiPropertyOptional({ nullable: true, type: String })
   thumbnail!: string | null;
+
+  @ApiProperty({ type: [String], description: 'Hotel photo URLs' })
+  images!: string[];
+
+  @ApiPropertyOptional({ nullable: true, type: String })
+  description!: string | null;
+
+  @ApiPropertyOptional({ nullable: true, type: String })
+  address!: string | null;
 
   @ApiProperty()
   summary!: string;

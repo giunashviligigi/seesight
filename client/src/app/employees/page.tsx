@@ -1,20 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
-import { authApi, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
+import { authApi, AuthUser, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
+import { companiesApi } from "@/lib/api/companies";
 import { departmentsApi, Department } from "@/lib/api/departments";
 import { employeesApi, Employee } from "@/lib/api/employees";
+import { normalizeCountryInput } from "@/lib/country";
+import { AppHeader } from "@/components/layout/app-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 
 type SortBy = "lastName" | "firstName" | "email" | "jobTitle";
 
-export default function EmployeesPage() {
+function EmployeesPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const companyIdParam = searchParams.get("companyId")?.trim() || "";
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [companyName, setCompanyName] = useState<string | null>(null);
+  const [scopedCompanyId, setScopedCompanyId] = useState<string | null>(null);
   const [items, setItems] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [total, setTotal] = useState(0);
@@ -34,7 +43,7 @@ export default function EmployeesPage() {
   const [jobTitle, setJobTitle] = useState("");
   const [phone, setPhone] = useState("");
   const [createDeptId, setCreateDeptId] = useState("");
-  const [createLogin, setCreateLogin] = useState(false);
+  const [createLogin, setCreateLogin] = useState(true);
   const [nationality, setNationality] = useState("");
   const [preferredAirport, setPreferredAirport] = useState("");
 
@@ -48,8 +57,15 @@ export default function EmployeesPage() {
   const [editPhone, setEditPhone] = useState("");
   const [editDeptId, setEditDeptId] = useState("");
 
+  const isSuperAdminView = user?.role === "SUPER_ADMIN";
+  const listCompanyId =
+    isSuperAdminView || scopedCompanyId
+      ? (scopedCompanyId ?? undefined)
+      : undefined;
+
   async function loadEmployees(
     token: string,
+    companyId: string | undefined,
     opts: {
       page?: number;
       search?: string;
@@ -60,6 +76,7 @@ export default function EmployeesPage() {
   ) {
     const result = await employeesApi.list(
       {
+        companyId,
         page: opts.page ?? page,
         pageSize,
         search: (opts.search ?? search) || undefined,
@@ -74,6 +91,10 @@ export default function EmployeesPage() {
     setPage(result.page);
   }
 
+  async function loadDepartments(token: string, companyId: string | undefined) {
+    setDepartments(await departmentsApi.list(companyId, token));
+  }
+
   useEffect(() => {
     const token = getStoredAccessToken();
     if (!token) {
@@ -82,24 +103,48 @@ export default function EmployeesPage() {
     }
 
     void (async () => {
+      setLoading(true);
       try {
         const me = await authApi.me(token);
+        setUser(me);
         if (me.role === "EMPLOYEE") {
           router.replace("/profile");
           return;
         }
         if (me.role === "SUPER_ADMIN") {
-          router.replace("/companies");
+          if (!companyIdParam) {
+            router.replace("/companies");
+            return;
+          }
+          const company = await companiesApi.getById(companyIdParam, token);
+          setCompanyName(company.name);
+          setScopedCompanyId(company.id);
+          await loadDepartments(token, company.id);
+          await loadEmployees(token, company.id, {
+            page: 1,
+            search: "",
+            departmentId: "",
+          });
           return;
         }
         if (!me.companyId) {
           router.replace("/company");
           return;
         }
-        const depts = await departmentsApi.list(undefined, token);
-        setDepartments(depts);
-        await loadEmployees(token, { page: 1, search: "", departmentId: "" });
+        setCompanyName(null);
+        setScopedCompanyId(me.companyId);
+        await loadDepartments(token, undefined);
+        await loadEmployees(token, undefined, {
+          page: 1,
+          search: "",
+          departmentId: "",
+        });
       } catch (err) {
+        if (err instanceof ApiError && (err.status === 404 || err.status === 403)) {
+          setError(err.message);
+          router.replace("/companies");
+          return;
+        }
         storeAccessToken(null);
         setError(err instanceof ApiError ? err.message : "Unable to load employees");
         router.replace("/login");
@@ -107,9 +152,8 @@ export default function EmployeesPage() {
         setLoading(false);
       }
     })();
-    // Initial load only
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router]);
+  }, [router, companyIdParam]);
 
   async function onFilter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -117,7 +161,13 @@ export default function EmployeesPage() {
     if (!token) return;
     setError(null);
     try {
-      await loadEmployees(token, { page: 1, search, departmentId, sortBy, sortOrder });
+      await loadEmployees(token, listCompanyId, {
+        page: 1,
+        search,
+        departmentId,
+        sortBy,
+        sortOrder,
+      });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Filter failed");
     }
@@ -130,6 +180,13 @@ export default function EmployeesPage() {
     setError(null);
     setMessage(null);
     try {
+      let nationalityCode: string | undefined;
+      try {
+        nationalityCode = normalizeCountryInput(nationality) || undefined;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Invalid nationality");
+        return;
+      }
       const created = await employeesApi.create(
         {
           email,
@@ -138,15 +195,16 @@ export default function EmployeesPage() {
           jobTitle: jobTitle || undefined,
           phone: phone || undefined,
           departmentId: createDeptId || undefined,
-          nationality: nationality || undefined,
+          nationality: nationalityCode,
           preferredAirport: preferredAirport || undefined,
           createLogin,
+          companyId: isSuperAdminView ? scopedCompanyId ?? undefined : undefined,
         },
         token,
       );
       setMessage(
         created.temporaryPassword
-          ? `employee created. temporary password: ${created.temporaryPassword}`
+          ? `employee account created. one-time password is in your notifications (and below): ${created.temporaryPassword}`
           : "employee created (roster only — no login).",
       );
       setEmail("");
@@ -158,7 +216,7 @@ export default function EmployeesPage() {
       setNationality("");
       setPreferredAirport("");
       setCreateLogin(false);
-      await loadEmployees(token, { page: 1 });
+      await loadEmployees(token, listCompanyId, { page: 1 });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Create failed");
     }
@@ -172,13 +230,17 @@ export default function EmployeesPage() {
     setMessage(null);
     try {
       await departmentsApi.create(
-        { name: deptName, code: deptCode || undefined },
+        {
+          name: deptName,
+          code: deptCode || undefined,
+          companyId: isSuperAdminView ? scopedCompanyId ?? undefined : undefined,
+        },
         token,
       );
       setDeptName("");
       setDeptCode("");
       setMessage("department created.");
-      setDepartments(await departmentsApi.list(undefined, token));
+      await loadDepartments(token, listCompanyId);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Department create failed");
     }
@@ -191,9 +253,9 @@ export default function EmployeesPage() {
     setMessage(null);
     try {
       await departmentsApi.remove(id, token);
-      setDepartments(await departmentsApi.list(undefined, token));
+      await loadDepartments(token, listCompanyId);
       setMessage("department removed.");
-      await loadEmployees(token);
+      await loadEmployees(token, listCompanyId);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Department delete failed");
     }
@@ -228,7 +290,7 @@ export default function EmployeesPage() {
       );
       setEditId(null);
       setMessage("employee updated.");
-      await loadEmployees(token);
+      await loadEmployees(token, listCompanyId);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Update failed");
     }
@@ -247,9 +309,28 @@ export default function EmployeesPage() {
         await employeesApi.activate(employee.id, token);
         setMessage(`${employee.email} activated.`);
       }
-      await loadEmployees(token);
+      await loadEmployees(token, listCompanyId);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Status update failed");
+    }
+  }
+
+  async function onDeleteEmployee(employee: Employee) {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    const confirmed = window.confirm(
+      `Remove ${employee.firstName} ${employee.lastName} (${employee.email})? Their login will be disabled and they will leave the roster.`,
+    );
+    if (!confirmed) return;
+    setError(null);
+    setMessage(null);
+    try {
+      await employeesApi.remove(employee.id, token);
+      setMessage(`${employee.email} removed.`);
+      if (editId === employee.id) setEditId(null);
+      await loadEmployees(token, listCompanyId);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Delete failed");
     }
   }
 
@@ -257,7 +338,7 @@ export default function EmployeesPage() {
     const token = getStoredAccessToken();
     if (!token) return;
     try {
-      await loadEmployees(token, { page: next });
+      await loadEmployees(token, listCompanyId, { page: next });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Pagination failed");
     }
@@ -265,7 +346,7 @@ export default function EmployeesPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  if (loading) {
+  if (loading || !user) {
     return (
       <main className="flex min-h-screen items-center justify-center px-6">
         <p className="text-ss-muted lowercase">loading employees...</p>
@@ -275,31 +356,27 @@ export default function EmployeesPage() {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-6 py-10">
-      <header className="flex items-center justify-between">
-        <Link href="/" className="text-sm font-semibold tracking-[0.35em] text-ss-text uppercase">
-          Seesight
-        </Link>
-        <div className="flex gap-3">
-          <Link href="/dashboard" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            dashboard
-          </Link>
-          <Link href="/trips" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            trips
-          </Link>
-          <Link href="/company" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            company
-          </Link>
-          <Link href="/account" className="text-sm text-ss-muted lowercase hover:text-ss-text">
-            account
-          </Link>
-        </div>
-      </header>
+      <AppHeader user={user} />
 
       <section className="mt-12 rounded-3xl border border-white/15 bg-ss-surface p-8">
-        <h1 className="text-3xl font-medium text-ss-text lowercase">employees</h1>
-        <p className="mt-2 text-sm text-ss-muted lowercase">
-          roster with search, department filter, sort, and pagination. deactivate keeps trip history.
-        </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-medium text-ss-text lowercase">employees</h1>
+            <p className="mt-2 text-sm text-ss-muted lowercase">
+              {companyName
+                ? `roster for ${companyName}`
+                : "roster with search, department filter, sort, and pagination. deactivate keeps trip history."}
+            </p>
+          </div>
+          {isSuperAdminView ? (
+            <Link
+              href="/companies"
+              className="text-sm text-ss-accent lowercase hover:underline"
+            >
+              back to companies
+            </Link>
+          ) : null}
+        </div>
 
         <form className="mt-8 grid gap-3 md:grid-cols-4" onSubmit={onFilter}>
           <Input
@@ -308,37 +385,38 @@ export default function EmployeesPage() {
             placeholder="search name, email, title"
             className="h-11 rounded-xl border-white/20 bg-ss-surface-strong text-ss-text md:col-span-2"
           />
-          <select
+          <Select
             value={departmentId}
-            onChange={(e) => setDepartmentId(e.target.value)}
-            className="h-11 rounded-xl border border-white/20 bg-ss-surface-strong px-3 text-ss-text lowercase"
-          >
-            <option value="">all departments</option>
-            {departments.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
+            onValueChange={setDepartmentId}
+            aria-label="department filter"
+            options={[
+              { value: "", label: "all departments" },
+              ...departments.map((d) => ({ value: d.id, label: d.name })),
+            ]}
+          />
           <div className="flex gap-2">
-            <select
+            <Select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortBy)}
-              className="h-11 flex-1 rounded-xl border border-white/20 bg-ss-surface-strong px-3 text-ss-text lowercase"
-            >
-              <option value="lastName">last name</option>
-              <option value="firstName">first name</option>
-              <option value="email">email</option>
-              <option value="jobTitle">job title</option>
-            </select>
-            <select
+              onValueChange={(v) => setSortBy(v as SortBy)}
+              aria-label="sort by"
+              className="flex-1"
+              options={[
+                { value: "lastName", label: "last name" },
+                { value: "firstName", label: "first name" },
+                { value: "email", label: "email" },
+                { value: "jobTitle", label: "job title" },
+              ]}
+            />
+            <Select
               value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value as "asc" | "desc")}
-              className="h-11 w-24 rounded-xl border border-white/20 bg-ss-surface-strong px-3 text-ss-text lowercase"
-            >
-              <option value="asc">asc</option>
-              <option value="desc">desc</option>
-            </select>
+              onValueChange={(v) => setSortOrder(v as "asc" | "desc")}
+              aria-label="sort order"
+              className="w-24"
+              options={[
+                { value: "asc", label: "asc" },
+                { value: "desc", label: "desc" },
+              ]}
+            />
           </div>
           <Button
             type="submit"
@@ -396,6 +474,13 @@ export default function EmployeesPage() {
                         className="text-ss-muted underline hover:text-ss-text"
                       >
                         {employee.status === "ACTIVE" ? "deactivate" : "activate"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void onDeleteEmployee(employee)}
+                        className="text-red-300 underline hover:text-red-200"
+                      >
+                        delete
                       </button>
                     </div>
                   </td>
@@ -470,18 +555,15 @@ export default function EmployeesPage() {
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label className="lowercase text-ss-muted">department</Label>
-              <select
+              <Select
                 value={editDeptId}
-                onChange={(e) => setEditDeptId(e.target.value)}
-                className="h-11 w-full rounded-xl border border-white/20 bg-ss-surface-strong px-3 text-ss-text lowercase"
-              >
-                <option value="">unassigned</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
+                onValueChange={setEditDeptId}
+                aria-label="edit department"
+                options={[
+                  { value: "", label: "unassigned" },
+                  ...departments.map((d) => ({ value: d.id, label: d.name })),
+                ]}
+              />
             </div>
             <div className="flex gap-3 sm:col-span-2">
               <Button
@@ -558,10 +640,9 @@ export default function EmployeesPage() {
               <div className="space-y-2">
                 <Label className="lowercase text-ss-muted">nationality</Label>
                 <Input
-                  maxLength={2}
                   value={nationality}
                   onChange={(e) => setNationality(e.target.value)}
-                  placeholder="GE"
+                  placeholder="Georgia"
                   className="h-11 rounded-xl border-white/20 bg-ss-surface-strong text-ss-text"
                 />
               </div>
@@ -578,18 +659,15 @@ export default function EmployeesPage() {
             </div>
             <div className="space-y-2">
               <Label className="lowercase text-ss-muted">department</Label>
-              <select
+              <Select
                 value={createDeptId}
-                onChange={(e) => setCreateDeptId(e.target.value)}
-                className="h-11 w-full rounded-xl border border-white/20 bg-ss-surface-strong px-3 text-ss-text lowercase"
-              >
-                <option value="">unassigned</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
+                onValueChange={setCreateDeptId}
+                aria-label="department"
+                options={[
+                  { value: "", label: "unassigned" },
+                  ...departments.map((d) => ({ value: d.id, label: d.name })),
+                ]}
+              />
             </div>
             <label className="flex items-center gap-2 text-sm text-ss-muted lowercase">
               <input
@@ -597,7 +675,7 @@ export default function EmployeesPage() {
                 checked={createLogin}
                 onChange={(e) => setCreateLogin(e.target.checked)}
               />
-              create login with temporary password
+              create login with one-time temporary password (employee must change it on first login)
             </label>
             <Button
               type="submit"
@@ -658,5 +736,19 @@ export default function EmployeesPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function EmployeesPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center px-6">
+          <p className="text-ss-muted lowercase">loading employees...</p>
+        </main>
+      }
+    >
+      <EmployeesPageContent />
+    </Suspense>
   );
 }

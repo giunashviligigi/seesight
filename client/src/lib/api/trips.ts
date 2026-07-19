@@ -81,11 +81,11 @@ export type TripTravelerInput = {
 };
 
 export type CreateTripInput = {
-  purpose: string;
+  purpose?: string;
   destinationCountry?: string;
   destinationCity?: string;
-  startDate: string;
-  endDate: string;
+  startDate?: string;
+  endDate?: string;
   budgetAmount?: number;
   budgetCurrency?: string;
   notes?: string;

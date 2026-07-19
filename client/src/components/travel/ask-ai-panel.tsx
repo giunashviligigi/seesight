@@ -62,7 +62,9 @@ export function AskAiPanel({
         <div>
           <h2 className="text-lg font-medium lowercase text-ss-text">ask ai</h2>
           <p className="mt-1 max-w-xl text-sm lowercase text-ss-muted">
-            get a ranked flight and hotel suggestion with plain-language tradeoffs.
+            ranks attached flight and hotel offers for the cheapest sensible combo
+            (gemini). search the market first, select offers, then ask — or use
+            “ask ai for cheapest deal” on the search results above.
           </p>
         </div>
         <Button

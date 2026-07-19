@@ -26,9 +26,12 @@ services:
       dockerfile: ../docker/Dockerfile.api
     container_name: seesight-api
     restart: unless-stopped
+    env_file:
+      - ../server/.env
     environment:
       NODE_ENV: development
       PORT: 3001
+      # Compose network host (overrides localhost DATABASE_URL from .env)
       DATABASE_URL: postgresql://seesight:seesight@postgres:5432/seesight?schema=public
       CORS_ORIGIN: http://localhost:3000
     ports:
