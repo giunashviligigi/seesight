@@ -137,7 +137,7 @@ describe('Approvals (e2e)', () => {
     if (app) await app.close();
   });
 
-  it('enforces self-approve block, double-approve, history, and notifications', async () => {
+  it('enforces role checks, double-approve, history, and notifications', async () => {
     const created = await request(app.getHttpServer())
       .post('/trips')
       .set('Authorization', `Bearer ${employeeToken}`)
@@ -210,7 +210,7 @@ describe('Approvals (e2e)', () => {
     ).toBe(true);
   });
 
-  it('blocks admin from approving own trip', async () => {
+  it('allows admin to approve own trip', async () => {
     const created = await request(app.getHttpServer())
       .post('/trips')
       .set('Authorization', `Bearer ${adminToken}`)
@@ -227,14 +227,12 @@ describe('Approvals (e2e)', () => {
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(201);
 
-    await request(app.getHttpServer())
+    const approved = await request(app.getHttpServer())
       .post(`/approvals/${created.body.id}/approve`)
       .set('Authorization', `Bearer ${adminToken}`)
-      .expect(403);
-
-    await request(app.getHttpServer())
-      .post(`/approvals/${created.body.id}/approve`)
-      .set('Authorization', `Bearer ${otherAdminToken}`)
+      .send({ comment: 'Manager self-approval' })
       .expect(201);
+
+    expect(approved.body.status).toBe('APPROVED');
   });
 });

@@ -54,6 +54,15 @@ const CANCELABLE_STATUSES: TripStatus[] = [
   TripStatus.REJECTED,
 ];
 
+/** Soft-delete allowed before travel starts / after terminal cancel|reject. */
+const DELETABLE_STATUSES: TripStatus[] = [
+  TripStatus.DRAFT,
+  TripStatus.PENDING_APPROVAL,
+  TripStatus.APPROVED,
+  TripStatus.REJECTED,
+  TripStatus.CANCELLED,
+];
+
 type TripRecord = Prisma.TripGetPayload<{
   include: {
     travelers: {
@@ -331,10 +340,82 @@ export class TripsService {
 
     this.assertTransition(trip.status, TripStatus.CANCELLED);
 
-    const updated = await this.prisma.trip.update({
-      where: { id: trip.id },
-      data: { status: TripStatus.CANCELLED },
-      include: tripInclude,
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.trip.update({
+        where: { id: trip.id },
+        data: { status: TripStatus.CANCELLED },
+      });
+
+      // Close any open approval so cancelled trips leave the pending queue.
+      const approval = await tx.approval.findUnique({
+        where: { tripId: trip.id },
+      });
+      if (approval && approval.status === ApprovalStatus.PENDING) {
+        await tx.approval.update({
+          where: { id: approval.id },
+          data: {
+            status: ApprovalStatus.REJECTED,
+            decidedAt: new Date(),
+          },
+        });
+        await tx.approvalAction.create({
+          data: {
+            approvalId: approval.id,
+            actorUserId: actor.id,
+            action: ApprovalActionType.REJECT,
+            comment: 'Trip cancelled',
+          },
+        });
+      }
+
+      return tx.trip.findUniqueOrThrow({
+        where: { id: trip.id },
+        include: tripInclude,
+      });
+    });
+
+    return this.toResponse(updated);
+  }
+
+  async remove(actor: RequestUser, id: string): Promise<TripResponseDto> {
+    const trip = await this.findAccessibleTrip(actor, id);
+    this.assertCanMutateTrip(actor, trip);
+
+    if (!DELETABLE_STATUSES.includes(trip.status)) {
+      throw new BadRequestException(
+        `Trip cannot be deleted while status is ${trip.status}. Cancel it first if needed.`,
+      );
+    }
+
+    const deletedAt = new Date();
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const approval = await tx.approval.findUnique({
+        where: { tripId: trip.id },
+      });
+      if (approval && approval.status === ApprovalStatus.PENDING) {
+        await tx.approval.update({
+          where: { id: approval.id },
+          data: {
+            status: ApprovalStatus.REJECTED,
+            decidedAt: deletedAt,
+          },
+        });
+        await tx.approvalAction.create({
+          data: {
+            approvalId: approval.id,
+            actorUserId: actor.id,
+            action: ApprovalActionType.REJECT,
+            comment: 'Trip deleted',
+          },
+        });
+      }
+
+      return tx.trip.update({
+        where: { id: trip.id },
+        data: { deletedAt },
+        include: tripInclude,
+      });
     });
 
     return this.toResponse(updated);
@@ -511,8 +592,13 @@ export class TripsService {
   ): Promise<TripResponseDto> {
     const trip = await this.findAccessibleTrip(actor, id);
     assertCompanyAccess(actor, trip.companyId);
-    this.assertNotSelfApprover(actor, trip);
     this.assertTransition(trip.status, nextStatus);
+
+    if (trip.status !== TripStatus.PENDING_APPROVAL) {
+      throw new BadRequestException(
+        `Trip must be pending approval (current status: ${trip.status})`,
+      );
+    }
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const next = await tx.trip.update({
@@ -574,21 +660,6 @@ export class TripsService {
     }
 
     return this.toResponse(updated);
-  }
-
-  private assertNotSelfApprover(actor: RequestUser, trip: TripRecord): void {
-    if (trip.createdByUserId === actor.id) {
-      throw new ForbiddenException('You cannot approve or reject your own trip');
-    }
-
-    const isTraveler = trip.travelers.some(
-      (t) => t.employee.userId === actor.id,
-    );
-    if (isTraveler) {
-      throw new ForbiddenException(
-        'You cannot approve or reject a trip you are traveling on',
-      );
-    }
   }
 
   private async notifyAdminsOfSubmission(

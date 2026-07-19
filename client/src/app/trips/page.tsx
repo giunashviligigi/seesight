@@ -13,6 +13,7 @@ import { readCompanyBudgetPolicy } from "@/lib/budget-policy";
 import { formatCountryLabel } from "@/lib/country";
 import { AppHeader } from "@/components/layout/app-header";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,6 +57,8 @@ export default function TripsPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [tripPendingDelete, setTripPendingDelete] = useState<Trip | null>(null);
 
   async function loadTrips(
     token: string,
@@ -187,6 +190,34 @@ export default function TripsPage() {
     }
   }
 
+  function canDeleteTrip(trip: Trip) {
+    return (
+      trip.status === "DRAFT" ||
+      trip.status === "PENDING_APPROVAL" ||
+      trip.status === "APPROVED" ||
+      trip.status === "REJECTED" ||
+      trip.status === "CANCELLED"
+    );
+  }
+
+  async function confirmDeleteTrip() {
+    const trip = tripPendingDelete;
+    const token = getStoredAccessToken();
+    if (!trip || !token || deletingId) return;
+
+    setDeletingId(trip.id);
+    setError(null);
+    try {
+      await tripsApi.remove(trip.id, token);
+      setTripPendingDelete(null);
+      await loadTrips(token);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Unable to delete trip");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center px-6">
@@ -216,7 +247,8 @@ export default function TripsPage() {
           <div>
             <h1 className="text-3xl font-medium text-ss-text lowercase">trips</h1>
             <p className="mt-2 text-sm text-ss-muted lowercase">
-              create, filter, and track business trip history — cancelled trips stay visible.
+              create, filter, and track business trip history. delete removes a
+              trip from the list; cancel keeps it visible.
             </p>
           </div>
           <Button
@@ -289,27 +321,43 @@ export default function TripsPage() {
         ) : (
           <ul className="mt-8 divide-y divide-white/10">
             {items.map((trip) => (
-              <li key={trip.id} className="py-4 first:pt-0">
+              <li
+                key={trip.id}
+                className="flex flex-col gap-3 py-4 first:pt-0 sm:flex-row sm:items-center sm:justify-between"
+              >
                 <Link
                   href={`/trips/${trip.id}`}
-                  className="flex flex-col gap-2 transition hover:opacity-90 sm:flex-row sm:items-center sm:justify-between"
+                  className="min-w-0 flex-1 transition hover:opacity-90"
                 >
-                  <div>
-                    <p className="text-ss-text lowercase">
-                      {trip.purpose || "untitled trip"}
-                    </p>
-                    <p className="mt-1 text-sm text-ss-muted lowercase">
-                      {destinationLabel(trip)} · {trip.travelers.length} traveler
-                      {trip.travelers.length === 1 ? "" : "s"}
-                    </p>
-                  </div>
-                  <div className="text-sm text-ss-muted lowercase sm:text-right">
-                    <p>
-                      {trip.startDate} → {trip.endDate}
-                    </p>
-                    <p className="mt-1">{formatStatus(trip.status)}</p>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-ss-text lowercase">
+                        {trip.purpose || "untitled trip"}
+                      </p>
+                      <p className="mt-1 text-sm text-ss-muted lowercase">
+                        {destinationLabel(trip)} · {trip.travelers.length}{" "}
+                        traveler
+                        {trip.travelers.length === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                    <div className="text-sm text-ss-muted lowercase sm:text-right">
+                      <p>
+                        {trip.startDate} → {trip.endDate}
+                      </p>
+                      <p className="mt-1">{formatStatus(trip.status)}</p>
+                    </div>
                   </div>
                 </Link>
+                {canDeleteTrip(trip) ? (
+                  <Button
+                    type="button"
+                    disabled={deletingId === trip.id}
+                    onClick={() => setTripPendingDelete(trip)}
+                    className="h-9 shrink-0 rounded-full border border-red-400/40 bg-transparent px-4 text-sm text-red-300 lowercase hover:bg-red-400/10"
+                  >
+                    {deletingId === trip.id ? "deleting…" : "delete"}
+                  </Button>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -347,6 +395,24 @@ export default function TripsPage() {
           </div>
         ) : null}
       </section>
+
+      <ConfirmDialog
+        open={tripPendingDelete !== null}
+        title="delete this trip?"
+        description={
+          tripPendingDelete
+            ? `"${tripPendingDelete.purpose || "untitled trip"}" will be removed from your trip list. this cannot be undone from here.`
+            : ""
+        }
+        confirmLabel="delete trip"
+        cancelLabel="keep trip"
+        busy={deletingId !== null}
+        onCancel={() => {
+          if (deletingId) return;
+          setTripPendingDelete(null);
+        }}
+        onConfirm={() => void confirmDeleteTrip()}
+      />
     </main>
   );
 }

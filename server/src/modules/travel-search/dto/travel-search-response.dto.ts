@@ -122,8 +122,26 @@ export class HotelOfferDto {
   @ApiPropertyOptional({ nullable: true, type: Number })
   rating!: number | null;
 
-  @ApiPropertyOptional({ nullable: true, type: Number })
+  @ApiPropertyOptional({
+    nullable: true,
+    type: Number,
+    description: 'Stay total for check-in → check-out (not per night)',
+  })
   priceAmount!: number | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    type: Number,
+    description: 'Average nightly rate implied by the stay total',
+  })
+  pricePerNight!: number | null;
+
+  @ApiProperty({
+    description:
+      'Whole nights between check-in and check-out (check-out exclusive)',
+    example: 4,
+  })
+  nights!: number;
 
   @ApiPropertyOptional({ nullable: true, type: String })
   currency!: string | null;

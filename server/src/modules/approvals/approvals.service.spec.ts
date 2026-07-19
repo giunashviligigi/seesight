@@ -94,6 +94,16 @@ describe('ApprovalsService', () => {
     expect(result.total).toBe(1);
     expect(result.items[0].purpose).toBe('Berlin');
     expect(result.items[0].travelerCount).toBe(1);
+    expect(prisma.approval.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: ApprovalStatus.PENDING,
+          trip: expect.objectContaining({
+            status: TripStatus.PENDING_APPROVAL,
+          }),
+        }),
+      }),
+    );
   });
 
   it('returns history via trip access check', async () => {
@@ -129,9 +139,9 @@ describe('ApprovalsService', () => {
     expect(tripsService.approve).toHaveBeenCalledWith(admin, 'trip_1', 'ok');
   });
 
-  it('propagates self-approve forbidden from trips', async () => {
+  it('propagates trip service errors on approve', async () => {
     tripsService.approve.mockRejectedValue(
-      new ForbiddenException('You cannot approve or reject your own trip'),
+      new ForbiddenException('Insufficient permissions'),
     );
     await expect(service.approve(admin, 'trip_1', {})).rejects.toBeInstanceOf(
       ForbiddenException,

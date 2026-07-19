@@ -50,7 +50,7 @@ export class ApprovalsController {
   @Post(':tripId/approve')
   @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiOperation({
-    summary: 'Approve a pending trip (self-approve forbidden)',
+    summary: 'Approve a pending trip',
   })
   @ApiOkResponse({ type: TripResponseDto })
   approve(
@@ -64,7 +64,7 @@ export class ApprovalsController {
   @Post(':tripId/reject')
   @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiOperation({
-    summary: 'Reject a pending trip (self-approve forbidden)',
+    summary: 'Reject a pending trip',
   })
   @ApiOkResponse({ type: TripResponseDto })
   reject(

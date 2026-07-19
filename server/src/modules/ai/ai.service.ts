@@ -280,6 +280,15 @@ export class AiService {
         ? Math.round(obj.adults)
         : fallback.adults;
 
+    const tripTypeRaw =
+      typeof obj.tripType === 'string' ? obj.tripType.trim().toLowerCase() : null;
+    const tripType =
+      tripTypeRaw === 'one_way' || tripTypeRaw === 'one-way'
+        ? ('one_way' as const)
+        : tripTypeRaw === 'round_trip' || tripTypeRaw === 'round-trip'
+          ? ('round_trip' as const)
+          : fallback.tripType;
+
     const notes = Array.isArray(obj.notes)
       ? obj.notes.filter((n): n is string => typeof n === 'string')
       : [];
@@ -294,6 +303,7 @@ export class AiService {
         fallback.destinationCity,
       departureDate,
       returnDate,
+      tripType,
       adults,
       source: 'gemini',
       notes: notes.length > 0 ? notes : fallback.notes,

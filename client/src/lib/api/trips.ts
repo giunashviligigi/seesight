@@ -172,6 +172,13 @@ export const tripsApi = {
     });
   },
 
+  remove(id: string, accessToken?: string | null) {
+    return apiRequest<Trip>(`/trips/${id}`, {
+      method: "DELETE",
+      accessToken: authToken(accessToken),
+    });
+  },
+
   approve(id: string, accessToken?: string | null) {
     return apiRequest<Trip>(`/trips/${id}/approve`, {
       method: "POST",

@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ApiError } from "@/lib/api/client";
-import { aiApi, RecommendItineraryResponse } from "@/lib/api/ai";
+import { aiApi } from "@/lib/api/ai";
 import { travelApi, FlightOffer, HotelOffer } from "@/lib/api/travel";
 import { AirportCombobox } from "@/components/travel/airport-combobox";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,9 @@ import {
   formatDuration,
   formatFlightClock,
   formatFlightDateTime,
+  formatHotelStayPrice,
+  formatNights,
+  nightsBetween,
 } from "@/lib/format-travel";
 import { parseTravelPrompt } from "@/lib/parse-travel-prompt";
 
@@ -92,7 +95,6 @@ export function TripSearchWidget({
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
-  const [askingAi, setAskingAi] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [attachingId, setAttachingId] = useState<string | null>(null);
   const [flights, setFlights] = useState<FlightOffer[]>([]);
@@ -100,9 +102,6 @@ export function TripSearchWidget({
   const [flightVisible, setFlightVisible] = useState(PAGE_SIZE);
   const [hotelVisible, setHotelVisible] = useState(PAGE_SIZE);
   const [hasSearched, setHasSearched] = useState(false);
-  const [aiResult, setAiResult] = useState<RecommendItineraryResponse | null>(
-    null,
-  );
   const [hotelDetail, setHotelDetail] = useState<HotelOffer | null>(null);
   const [hotelPhotoIndex, setHotelPhotoIndex] = useState(0);
 
@@ -139,7 +138,8 @@ export function TripSearchWidget({
       params.tripType === "round_trip" && params.ret
         ? params.ret
         : undefined;
-    const hotelCheckOut = returnDate || params.depart;
+    // One-way flights may still include a stay end date for hotel checkout.
+    const hotelCheckOut = params.ret || returnDate || params.depart;
     const [flightResult, hotelResult] = await Promise.all([
       travelApi.searchFlights(
         {
@@ -188,43 +188,6 @@ export function TripSearchWidget({
     return { nextFlights, nextHotels, flightResult, hotelResult };
   }
 
-  async function requestAiRecommendation(
-    nextFlights: FlightOffer[],
-    nextHotels: HotelOffer[],
-  ) {
-    if (nextFlights.length === 0 && nextHotels.length === 0) {
-      throw new Error("No offers to rank");
-    }
-    const result = await aiApi.recommendItinerary(
-      {
-        tripId,
-        flights: nextFlights.slice(0, 8).map((f) => ({
-          id: f.id,
-          origin: f.origin,
-          destination: f.destination,
-          airline: f.airline ?? undefined,
-          stops: f.stops,
-          totalDurationMinutes: f.totalDurationMinutes ?? undefined,
-          priceAmount: f.priceAmount,
-          currency: f.currency ?? currency,
-          summary: f.summary,
-        })),
-        hotels: nextHotels.slice(0, 8).map((h) => ({
-          id: h.id,
-          hotelName: h.hotelName,
-          city: h.city ?? undefined,
-          stars: h.stars ?? undefined,
-          priceAmount: h.priceAmount,
-          currency: h.currency ?? currency,
-          summary: h.summary,
-        })),
-      },
-      accessToken,
-    );
-    setAiResult(result);
-    return result;
-  }
-
   async function onSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (disabled) return;
@@ -239,7 +202,6 @@ export function TripSearchWidget({
     setSearching(true);
     setError(null);
     setMessage(null);
-    setAiResult(null);
     try {
       const adultsCount = Math.max(1, Number(adults) || 1);
       const { nextFlights, nextHotels, flightResult, hotelResult } =
@@ -276,7 +238,6 @@ export function TripSearchWidget({
     setSuggesting(true);
     setError(null);
     setMessage(null);
-    setAiResult(null);
 
     try {
       let parsed = parseTravelPrompt(text);
@@ -295,6 +256,7 @@ export function TripSearchWidget({
           destinationCity: remote.destinationCity ?? parsed.destinationCity,
           departureDate: remote.departureDate ?? parsed.departureDate,
           returnDate: remote.returnDate ?? parsed.returnDate,
+          tripType: remote.tripType ?? parsed.tripType,
           adults: remote.adults ?? parsed.adults,
           notes: remote.notes?.length ? remote.notes : parsed.notes,
         };
@@ -303,8 +265,10 @@ export function TripSearchWidget({
       }
 
       if (!parsed.originIata || !parsed.destinationIata || !parsed.departureDate) {
+        const detail =
+          parsed.notes.length > 0 ? ` (${parsed.notes.join("; ")})` : "";
         setError(
-          "could not understand the trip. include from/to cities and dates (e.g. 1 august to 6 august, tbilisi to berlin).",
+          `could not understand the trip${detail}. try e.g. "one way from kutaisi to budapest from 21 november to 29 november".`,
         );
         return;
       }
@@ -313,9 +277,8 @@ export function TripSearchWidget({
       const nextDestination = parsed.destinationIata;
       const nextDepart = parsed.departureDate;
       const nextReturn = parsed.returnDate ?? "";
-      const nextTripType: "one_way" | "round_trip" = nextReturn
-        ? "round_trip"
-        : "one_way";
+      const nextTripType: "one_way" | "round_trip" =
+        parsed.tripType ?? (nextReturn ? "round_trip" : "one_way");
       const nextCity = parsed.destinationCity ?? city;
       const nextAdults = String(parsed.adults ?? Math.max(1, Number(adults) || 1));
 
@@ -340,14 +303,6 @@ export function TripSearchWidget({
       setMessage(
         `understood: ${parsed.originCity ?? nextOrigin} → ${parsed.destinationCity ?? nextDestination} · ${nextDepart}${nextReturn ? ` to ${nextReturn}` : ""} · ${nextTripType === "round_trip" ? "round trip" : "one way"} · found ${nextFlights.length} flights and ${nextHotels.length} hotels`,
       );
-
-      if (nextFlights.length > 0 || nextHotels.length > 0) {
-        const result = await requestAiRecommendation(nextFlights, nextHotels);
-        setMessage(
-          (prev) =>
-            `${prev ?? ""} · ai pick ready (${result.source === "gemini" ? "gemini" : "rule-based"})`,
-        );
-      }
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -358,26 +313,6 @@ export function TripSearchWidget({
       );
     } finally {
       setSuggesting(false);
-    }
-  }
-
-  async function onAskAiBestDeal() {
-    if (disabled || askingAi) return;
-    if (flights.length === 0 && hotels.length === 0) {
-      setError("search flights and hotels first, then ask ai");
-      return;
-    }
-    setAskingAi(true);
-    setError(null);
-    try {
-      const result = await requestAiRecommendation(flights, hotels);
-      setMessage(
-        `ai suggestion ready (${result.source === "gemini" ? "gemini" : "rule-based fallback"})`,
-      );
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "AI recommendation failed");
-    } finally {
-      setAskingAi(false);
     }
   }
 
@@ -413,23 +348,7 @@ export function TripSearchWidget({
     setHotelPhotoIndex(0);
   }
 
-  function offerNameById(id: string | null | undefined, kind: "flight" | "hotel") {
-    if (!id) return "none";
-    if (kind === "flight") {
-      const offer = flights.find((f) => f.id === id);
-      if (!offer) return id;
-      return (
-        offer.summary ||
-        `${offer.airline ?? "flight"} · ${offer.origin} → ${offer.destination}`
-      );
-    }
-    const offer = hotels.find((h) => h.id === id);
-    return offer?.hotelName ?? id;
-  }
-
   const detailPhotos = hotelDetail ? hotelImages(hotelDetail) : [];
-  const aiFlightId = aiResult?.recommendation.recommendedFlightId ?? null;
-  const aiHotelId = aiResult?.recommendation.recommendedHotelId ?? null;
 
   return (
     <div className="space-y-6">
@@ -448,7 +367,7 @@ export function TripSearchWidget({
           onChange={(e) => setNlPrompt(e.target.value)}
           disabled={disabled || suggesting}
           rows={3}
-          placeholder="from 1 august to 6 august i want to go from tbilisi to berlin. suggest me flights and hotels."
+          placeholder="i want one way trip to budapest from 21 november to 29 november from kutaisi"
           className="mt-2 w-full resize-y rounded-2xl border border-white/15 bg-transparent px-4 py-3 text-sm lowercase text-ss-text placeholder:text-ss-muted focus:outline-none focus:ring-1 focus:ring-ss-accent"
         />
         <div className="mt-3 flex flex-wrap gap-3">
@@ -578,19 +497,6 @@ export function TripSearchWidget({
           >
             {searching ? "searching market…" : "search flights & hotels"}
           </Button>
-          <Button
-            type="button"
-            disabled={
-              disabled ||
-              askingAi ||
-              suggesting ||
-              (!hasSearched && flights.length === 0)
-            }
-            onClick={() => void onAskAiBestDeal()}
-            className="h-11 rounded-full border border-white/20 bg-transparent px-6 text-ss-text lowercase hover:bg-white/5 disabled:opacity-40"
-          >
-            {askingAi ? "ai thinking…" : "ask ai for best deal"}
-          </Button>
         </div>
       </form>
 
@@ -614,33 +520,6 @@ export function TripSearchWidget({
         </p>
       ) : null}
 
-      {aiResult ? (
-        <div className="rounded-2xl border border-ss-accent/30 bg-ss-surface-strong p-5 text-sm lowercase">
-          <p className="text-xs text-ss-muted">
-            ai pick ·{" "}
-            {aiResult.source === "gemini" ? "gemini" : "rule-based fallback"}
-          </p>
-          <p className="mt-2 text-ss-text">
-            flight: {offerNameById(aiFlightId, "flight")}
-          </p>
-          <p className="mt-1 text-ss-text">
-            hotel: {offerNameById(aiHotelId, "hotel")}
-          </p>
-          <p className="mt-1 font-medium text-ss-accent">
-            estimated total: {aiResult.recommendation.estimatedTotal ?? "—"}{" "}
-            {aiResult.recommendation.currency}
-          </p>
-          <p className="mt-3 leading-relaxed text-ss-text">
-            {aiResult.recommendation.reasoning}
-          </p>
-          {aiResult.recommendation.tradeoffs ? (
-            <p className="mt-2 text-ss-muted">
-              tradeoffs: {aiResult.recommendation.tradeoffs}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
       {hasSearched ? (
         <div className="grid gap-6 lg:grid-cols-2">
           <div>
@@ -655,16 +534,13 @@ export function TripSearchWidget({
                 <ul className="mt-3 space-y-3">
                   {visibleFlights.map((offer) => {
                     const isCheapest = offer.id === cheapestFlightId;
-                    const isAiPick = offer.id === aiFlightId;
                     return (
                       <li
                         key={offer.id}
                         className={`rounded-2xl border p-4 text-sm lowercase ${
-                          isAiPick
-                            ? "border-ss-accent bg-ss-surface-strong"
-                            : isCheapest
-                              ? "border-ss-accent/50 bg-ss-surface-strong"
-                              : "border-white/10 bg-ss-surface-strong"
+                          isCheapest
+                            ? "border-ss-accent/50 bg-ss-surface-strong"
+                            : "border-white/10 bg-ss-surface-strong"
                         }`}
                       >
                         <div className="flex flex-wrap items-start justify-between gap-2">
@@ -682,11 +558,6 @@ export function TripSearchWidget({
                             </p>
                           </div>
                           <div className="flex flex-wrap gap-1">
-                            {isAiPick ? (
-                              <span className="rounded-full bg-ss-accent/20 px-2 py-0.5 text-[0.65rem] text-ss-accent">
-                                ai pick
-                              </span>
-                            ) : null}
                             {isCheapest ? (
                               <span className="rounded-full bg-white/10 px-2 py-0.5 text-[0.65rem] text-ss-muted">
                                 cheapest
@@ -801,8 +672,8 @@ export function TripSearchWidget({
           </div>
           <div>
             <h3 className="text-sm text-ss-muted lowercase">
-              hotels · cheapest first · showing {visibleHotels.length} of{" "}
-              {hotels.length}
+              hotels · cheapest first · stay total · showing{" "}
+              {visibleHotels.length} of {hotels.length}
             </h3>
             {hotels.length === 0 ? (
               <p className="mt-3 text-sm text-ss-muted lowercase">no hotels found</p>
@@ -811,17 +682,14 @@ export function TripSearchWidget({
                 <ul className="mt-3 space-y-3">
                   {visibleHotels.map((offer) => {
                     const isCheapest = offer.id === cheapestHotelId;
-                    const isAiPick = offer.id === aiHotelId;
                     const photos = hotelImages(offer);
                     return (
                       <li
                         key={offer.id}
                         className={`overflow-hidden rounded-2xl border text-sm lowercase ${
-                          isAiPick
-                            ? "border-ss-accent bg-ss-surface-strong"
-                            : isCheapest
-                              ? "border-ss-accent/50 bg-ss-surface-strong"
-                              : "border-white/10 bg-ss-surface-strong"
+                          isCheapest
+                            ? "border-ss-accent/50 bg-ss-surface-strong"
+                            : "border-white/10 bg-ss-surface-strong"
                         }`}
                       >
                         <button
@@ -847,11 +715,6 @@ export function TripSearchWidget({
                             <div className="flex flex-wrap items-start justify-between gap-2">
                               <p className="text-ss-text">{offer.hotelName}</p>
                               <div className="flex flex-wrap gap-1">
-                                {isAiPick ? (
-                                  <span className="rounded-full bg-ss-accent/20 px-2 py-0.5 text-[0.65rem] text-ss-accent">
-                                    ai pick
-                                  </span>
-                                ) : null}
                                 {isCheapest ? (
                                   <span className="rounded-full bg-white/10 px-2 py-0.5 text-[0.65rem] text-ss-muted">
                                     cheapest
@@ -860,9 +723,14 @@ export function TripSearchWidget({
                               </div>
                             </div>
                             <p className="mt-1 text-ss-muted">
-                              {offer.priceAmount != null
-                                ? `${offer.priceAmount} ${offer.currency ?? currency}`
-                                : "price n/a"}
+                              {formatHotelStayPrice({
+                                priceAmount: offer.priceAmount,
+                                currency: offer.currency ?? currency,
+                                checkIn: offer.checkIn,
+                                checkOut: offer.checkOut,
+                                nights: offer.nights,
+                                pricePerNight: offer.pricePerNight,
+                              })}
                               {offer.rating
                                 ? ` · ${offer.rating.toFixed(1)} rating`
                                 : ""}
@@ -979,11 +847,16 @@ export function TripSearchWidget({
 
             <div className="mt-4 grid gap-3 text-sm lowercase sm:grid-cols-2">
               <div>
-                <p className="text-ss-muted">price</p>
+                <p className="text-ss-muted">stay total</p>
                 <p className="text-ss-text">
-                  {hotelDetail.priceAmount != null
-                    ? `${hotelDetail.priceAmount} ${hotelDetail.currency ?? currency}`
-                    : "—"}
+                  {formatHotelStayPrice({
+                    priceAmount: hotelDetail.priceAmount,
+                    currency: hotelDetail.currency ?? currency,
+                    checkIn: hotelDetail.checkIn,
+                    checkOut: hotelDetail.checkOut,
+                    nights: hotelDetail.nights,
+                    pricePerNight: hotelDetail.pricePerNight,
+                  })}
                 </p>
               </div>
               <div>
@@ -1002,6 +875,15 @@ export function TripSearchWidget({
               <div>
                 <p className="text-ss-muted">check-out</p>
                 <p className="text-ss-text">{hotelDetail.checkOut}</p>
+              </div>
+              <div>
+                <p className="text-ss-muted">nights</p>
+                <p className="text-ss-text">
+                  {formatNights(
+                    hotelDetail.nights ??
+                      nightsBetween(hotelDetail.checkIn, hotelDetail.checkOut),
+                  ) || "—"}
+                </p>
               </div>
             </div>
 

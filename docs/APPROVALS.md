@@ -8,7 +8,7 @@ Manager review before travel proceeds. Builds on the M7 trip status machine.
 |-------|--------|
 | Submit | `DRAFT → PENDING_APPROVAL` creates/resets `Approval` + `SUBMIT` action |
 | Decide | Company admins (and super admins) approve/reject with optional comment |
-| Self-approve | **Forbidden** if actor created the trip or is a traveler on it |
+| Self-approve | Allowed for company admins / super admins (they own the approval queue) |
 | Edit / attach offers | Only `DRAFT` and `REJECTED` (locked while pending or after approval) |
 | Start travel | Still requires `APPROVED → IN_PROGRESS` (cannot skip approval) |
 | Rejected trips | Editable + `reopen` to `DRAFT`, then resubmit |
@@ -32,7 +32,7 @@ REJECTED → DRAFT (reopen) → …
 | POST | `/approvals/:tripId/approve` | SUPER_ADMIN, COMPANY_ADMIN |
 | POST | `/approvals/:tripId/reject` | SUPER_ADMIN, COMPANY_ADMIN |
 
-Trip aliases remain: `POST /trips/:id/approve|reject|submit` (same self-approve rules).
+Trip aliases remain: `POST /trips/:id/approve|reject|submit`.
 
 ### Notifications
 

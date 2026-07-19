@@ -38,6 +38,7 @@ Invalid transitions return **400** with message `Invalid status transition from 
 | Group travel | Multiple employees; duplicate traveler ids rejected; primary auto-assigned if omitted. |
 | Edit lock | Editable in `DRAFT` and `REJECTED` only (locked while pending — M10). |
 | Cancel | Soft status only — row kept (`deletedAt` unused for cancel). Visible in list filters. |
+| Delete | Soft-delete via `deletedAt`. Allowed for `DRAFT`, `PENDING_APPROVAL`, `APPROVED`, `REJECTED`, `CANCELLED`. Closes open approvals. Hidden from lists. |
 | Submit | Creates/updates `Approval` (`PENDING`) + `ApprovalAction.SUBMIT`. |
 | Employee scope | List/detail limited to trips they created or travel on; must include self when creating. |
 | Tenant | Company admin own company; super admin passes `companyId`. |
@@ -53,6 +54,7 @@ Invalid transitions return **400** with message `Invalid status transition from 
 | PATCH | `/trips/:id` | same (edit lock applies) |
 | POST | `/trips/:id/submit` | same |
 | POST | `/trips/:id/cancel` | same |
+| DELETE | `/trips/:id` | same — soft-delete (see Decisions) |
 | POST | `/trips/:id/approve` | SUPER_ADMIN, COMPANY_ADMIN |
 | POST | `/trips/:id/reject` | SUPER_ADMIN, COMPANY_ADMIN |
 | POST | `/trips/:id/start` | SUPER_ADMIN, COMPANY_ADMIN |

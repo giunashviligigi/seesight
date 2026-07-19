@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ApprovalStatus, Prisma } from '@prisma/client';
+import { ApprovalStatus, Prisma, TripStatus } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { resolveTenantCompanyId } from '../../common/tenant/tenant.utils';
 import { RequestUser } from '../auth/types/auth.types';
@@ -33,6 +33,7 @@ export class ApprovalsService {
       trip: {
         companyId,
         deletedAt: null,
+        status: TripStatus.PENDING_APPROVAL,
       },
     };
 

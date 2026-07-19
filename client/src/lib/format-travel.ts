@@ -32,3 +32,48 @@ export function formatFlightClock(value: string | null | undefined): string {
     minute: "2-digit",
   });
 }
+
+/** Whole nights between ISO dates (check-out exclusive). Minimum 1. */
+export function nightsBetween(
+  checkIn: string | null | undefined,
+  checkOut: string | null | undefined,
+): number | null {
+  if (!checkIn || !checkOut) return null;
+  const start = Date.parse(`${checkIn}T00:00:00.000Z`);
+  const end = Date.parse(`${checkOut}T00:00:00.000Z`);
+  if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return null;
+  return Math.max(1, Math.round((end - start) / 86_400_000));
+}
+
+export function formatNights(nights: number | null | undefined): string {
+  if (nights == null || !Number.isFinite(nights) || nights < 1) return "";
+  const n = Math.round(nights);
+  return n === 1 ? "1 night" : `${n} nights`;
+}
+
+export function formatHotelStayPrice(opts: {
+  priceAmount: number | null | undefined;
+  currency: string | null | undefined;
+  checkIn?: string | null;
+  checkOut?: string | null;
+  nights?: number | null;
+  pricePerNight?: number | null;
+}): string {
+  const nights =
+    opts.nights ?? nightsBetween(opts.checkIn, opts.checkOut) ?? null;
+  const nightsLabel = formatNights(nights);
+  if (opts.priceAmount == null) {
+    return nightsLabel || "price n/a";
+  }
+  const currency = opts.currency ?? "EUR";
+  const total = `${opts.priceAmount} ${currency}`;
+  if (!nightsLabel) return `${total} total`;
+  const perNight =
+    opts.pricePerNight != null
+      ? opts.pricePerNight
+      : nights && nights > 0
+        ? Math.round((opts.priceAmount / nights) * 100) / 100
+        : null;
+  if (perNight == null) return `${total} · ${nightsLabel}`;
+  return `${total} total · ${nightsLabel} · ~${perNight} ${currency}/night`;
+}

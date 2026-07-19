@@ -28,6 +28,8 @@ const MONTHS: Record<string, number> = {
   december: 12,
 };
 
+const MONTH_NAMES = Object.keys(MONTHS).sort((a, b) => b.length - a.length);
+
 function pad(n: number): string {
   return String(n).padStart(2, '0');
 }
@@ -71,23 +73,22 @@ function parseDayMonth(
   return toIsoDate(year, month, day);
 }
 
+/** Normalize "29november" / "21st" before date regexes. */
+export function normalizeTravelText(text: string): string {
+  let next = text.replace(/(\d+)(st|nd|rd|th)\b/gi, '$1');
+  const monthAlt = MONTH_NAMES.join('|');
+  next = next.replace(
+    new RegExp(`\\b(\\d{1,2})\\s*(${monthAlt})\\b`, 'gi'),
+    '$1 $2',
+  );
+  return next.replace(/\s+/g, ' ').trim();
+}
+
 function extractDates(
   text: string,
   reference: Date,
 ): { departureDate: string | null; returnDate: string | null } {
-  const normalized = text.replace(/(\d+)(st|nd|rd|th)\b/gi, '$1');
-
-  const rangeMonth = normalized.match(
-    /\b(?:from\s+)?(\d{1,2})\s*[-–to]+\s*(\d{1,2})\s+([A-Za-z]+)(?:\s+(\d{2,4}))?\b/i,
-  );
-  if (rangeMonth) {
-    const month = rangeMonth[3];
-    const year = rangeMonth[4];
-    return {
-      departureDate: parseDayMonth(rangeMonth[1], month, year, reference),
-      returnDate: parseDayMonth(rangeMonth[2], month, year, reference),
-    };
-  }
+  const normalized = normalizeTravelText(text);
 
   const fromToMonths = normalized.match(
     /\b(?:from\s+)?(\d{1,2})\s+([A-Za-z]+)(?:\s+(\d{2,4}))?\s+(?:to|until|-|–)\s+(\d{1,2})\s+([A-Za-z]+)(?:\s+(\d{2,4}))?\b/i,
@@ -109,6 +110,18 @@ function extractDates(
     };
   }
 
+  const rangeMonth = normalized.match(
+    /\b(?:from\s+)?(\d{1,2})\s*[-–to]+\s*(\d{1,2})\s+([A-Za-z]+)(?:\s+(\d{2,4}))?\b/i,
+  );
+  if (rangeMonth) {
+    const month = rangeMonth[3];
+    const year = rangeMonth[4];
+    return {
+      departureDate: parseDayMonth(rangeMonth[1], month, year, reference),
+      returnDate: parseDayMonth(rangeMonth[2], month, year, reference),
+    };
+  }
+
   const isoRange = normalized.match(
     /\b(\d{4}-\d{2}-\d{2})\s*(?:to|-|–)\s*(\d{4}-\d{2}-\d{2})\b/i,
   );
@@ -116,7 +129,130 @@ function extractDates(
     return { departureDate: isoRange[1], returnDate: isoRange[2] };
   }
 
+  const single = normalized.match(
+    /\b(?:on|depart(?:ing)?|leave|leaving)?\s*(\d{1,2})\s+([A-Za-z]+)(?:\s+(\d{2,4}))?\b/i,
+  );
+  if (single) {
+    return {
+      departureDate: parseDayMonth(
+        single[1],
+        single[2],
+        single[3],
+        reference,
+      ),
+      returnDate: null,
+    };
+  }
+
   return { departureDate: null, returnDate: null };
+}
+
+function stripDatePhrases(text: string): string {
+  const normalized = normalizeTravelText(text);
+  return normalized
+    .replace(
+      /\b(?:from\s+)?\d{1,2}\s+[A-Za-z]+(?:\s+\d{2,4})?\s+(?:to|until|-|–)\s+\d{1,2}\s+[A-Za-z]+(?:\s+\d{2,4})?\b/gi,
+      ' ',
+    )
+    .replace(/\b(?:from\s+)?\d{1,2}\s*[-–to]+\s*\d{1,2}\s+[A-Za-z]+(?:\s+\d{2,4})?\b/gi, ' ')
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ')
+    .replace(/\b\d{1,2}\s+[A-Za-z]+(?:\s+\d{2,4})?\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractTripType(
+  text: string,
+  hasReturnDate: boolean,
+): 'one_way' | 'round_trip' {
+  if (/\b(one[\s-]?way|ow)\b/i.test(text)) return 'one_way';
+  if (/\b(round[\s-]?trip|return(?:\s+trip)?|two[\s-]?way)\b/i.test(text)) {
+    return 'round_trip';
+  }
+  return hasReturnDate ? 'round_trip' : 'one_way';
+}
+
+function resolveNamedPlace(raw: string): { iata: string; city: string } | null {
+  const cleaned = raw
+    .replace(/\b(airport|international|intl)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned || /^\d/.test(cleaned)) return null;
+  return resolveCityQuery(cleaned);
+}
+
+function extractRoute(text: string): {
+  origin: { iata: string; city: string } | null;
+  destination: { iata: string; city: string } | null;
+} {
+  const forCities = stripDatePhrases(text);
+
+  // "to budapest ... from kutaisi"
+  const toFrom = forCities.match(
+    /\bto\s+([A-Za-z][A-Za-z\s.'-]{1,40}?)\s+(?:.*?)\bfrom\s+([A-Za-z][A-Za-z\s.'-]{1,40}?)(?:\b|$)/i,
+  );
+  if (toFrom) {
+    const destination = resolveNamedPlace(toFrom[1]);
+    const origin = resolveNamedPlace(toFrom[2]);
+    if (origin || destination) {
+      return { origin, destination };
+    }
+  }
+
+  // "from kutaisi to budapest"
+  const fromTo = forCities.match(
+    /\bfrom\s+([A-Za-z][A-Za-z\s.'-]{1,40}?)\s+to\s+([A-Za-z][A-Za-z\s.'-]{1,40}?)(?:\b|$)/i,
+  );
+  if (fromTo) {
+    const origin = resolveNamedPlace(fromTo[1]);
+    const destination = resolveNamedPlace(fromTo[2]);
+    if (origin || destination) {
+      return { origin, destination };
+    }
+  }
+
+  // Keyword-tagged single cities
+  const fromOnly = forCities.match(
+    /\bfrom\s+([A-Za-z][A-Za-z\s.'-]{1,40}?)(?:\b|$)/i,
+  );
+  const toOnly = forCities.match(
+    /\b(?:to|into|towards)\s+([A-Za-z][A-Za-z\s.'-]{1,40}?)(?:\b|$)/i,
+  );
+  let origin = fromOnly ? resolveNamedPlace(fromOnly[1]) : null;
+  let destination = toOnly ? resolveNamedPlace(toOnly[1]) : null;
+
+  if (origin && destination) {
+    return { origin, destination };
+  }
+
+  // Fallback: city mentions in remaining text (prefer tagged ones)
+  const mentions: Array<{ iata: string; city: string; index: number }> = [];
+  const lower = forCities.toLowerCase();
+  for (const row of CITY_AIRPORTS) {
+    const names = [row.city, ...(row.aliases ?? [])];
+    for (const name of names) {
+      const idx = lower.indexOf(name.toLowerCase());
+      if (idx >= 0) {
+        mentions.push({ iata: row.iata, city: row.city, index: idx });
+        break;
+      }
+    }
+  }
+  mentions.sort((a, b) => a.index - b.index);
+  const unique: Array<{ iata: string; city: string }> = [];
+  for (const m of mentions) {
+    if (!unique.some((u) => u.city === m.city)) {
+      unique.push({ iata: m.iata, city: m.city });
+    }
+  }
+
+  if (!origin && unique[0]) origin = unique[0];
+  if (!destination && unique[1]) destination = unique[1];
+  if (!destination && unique[0] && origin?.city !== unique[0].city) {
+    destination = unique[0];
+  }
+
+  return { origin, destination };
 }
 
 export function heuristicParseTravelIntent(
@@ -126,43 +262,8 @@ export function heuristicParseTravelIntent(
   const notes: string[] = [];
   const text = prompt.trim();
   const dates = extractDates(text, referenceDate);
-
-  let origin: { iata: string; city: string } | null = null;
-  let destination: { iata: string; city: string } | null = null;
-
-  const fromTo = text.match(
-    /\bfrom\s+([A-Za-z\s.'-]{2,40}?)\s+to\s+([A-Za-z\s.'-]{2,40}?)(?:\b(?:on|from|between|for|suggest|find|with|and|,|\.|$))/i,
-  );
-  if (fromTo) {
-    origin = resolveCityQuery(fromTo[1].trim());
-    destination = resolveCityQuery(fromTo[2].trim());
-  }
-
-  if (!origin || !destination) {
-    const mentions: Array<{ iata: string; city: string; index: number }> = [];
-    for (const row of CITY_AIRPORTS) {
-      const names = [row.city, ...(row.aliases ?? [])];
-      for (const name of names) {
-        const idx = text.toLowerCase().indexOf(name.toLowerCase());
-        if (idx >= 0) {
-          mentions.push({ iata: row.iata, city: row.city, index: idx });
-          break;
-        }
-      }
-    }
-    mentions.sort((a, b) => a.index - b.index);
-    const unique: Array<{ iata: string; city: string }> = [];
-    for (const m of mentions) {
-      if (!unique.some((u) => u.city === m.city)) {
-        unique.push({ iata: m.iata, city: m.city });
-      }
-    }
-    if (!origin && unique[0]) origin = unique[0];
-    if (!destination && unique[1]) destination = unique[1];
-    if (!destination && unique[0] && origin?.city !== unique[0].city) {
-      destination = unique[0];
-    }
-  }
+  const route = extractRoute(text);
+  const tripType = extractTripType(text, Boolean(dates.returnDate));
 
   const adultsMatch = text.match(
     /\b(\d+)\s*(?:adults?|travelers?|travellers?|people|persons?|pax)\b/i,
@@ -170,17 +271,20 @@ export function heuristicParseTravelIntent(
   const adults = adultsMatch ? Number(adultsMatch[1]) : null;
 
   if (!dates.departureDate) notes.push('could not detect departure date');
-  if (!dates.returnDate) notes.push('could not detect return date');
-  if (!origin) notes.push('could not detect origin city');
-  if (!destination) notes.push('could not detect destination city');
+  if (!dates.returnDate && tripType === 'round_trip') {
+    notes.push('could not detect return date');
+  }
+  if (!route.origin) notes.push('could not detect origin city');
+  if (!route.destination) notes.push('could not detect destination city');
 
   return {
-    originIata: origin?.iata ?? null,
-    destinationIata: destination?.iata ?? null,
-    originCity: origin?.city ?? null,
-    destinationCity: destination?.city ?? null,
+    originIata: route.origin?.iata ?? null,
+    destinationIata: route.destination?.iata ?? null,
+    originCity: route.origin?.city ?? null,
+    destinationCity: route.destination?.city ?? null,
     departureDate: dates.departureDate,
     returnDate: dates.returnDate,
+    tripType,
     adults:
       adults != null && Number.isFinite(adults) && adults >= 1 && adults <= 9
         ? adults
@@ -190,12 +294,28 @@ export function heuristicParseTravelIntent(
   };
 }
 
-export const PARSE_TRAVEL_SYSTEM = `You are SeeSight's travel intent parser.
-Extract structured trip search fields from a user's free-text request.
-Return JSON only. Do not invent airports that are not implied.
-Dates must be ISO YYYY-MM-DD. If year is missing, use the nearest future date relative to referenceDate.
-IATA codes should be primary commercial airports for the cities mentioned.
-adults defaults to null if unspecified.`;
+export const PARSE_TRAVEL_SYSTEM = `You are SeeSight's travel intent parser for business trips.
+Extract structured search fields from free-text. Return JSON only.
+
+Rules:
+- origin = departure city/airport; destination = arrival city.
+- Phrases like "to Budapest from Kutaisi" mean origin=Kutaisi, destination=Budapest.
+- "from Kutaisi to Budapest" means the same.
+- Dates must be ISO YYYY-MM-Day. If year is missing, pick the nearest future date vs referenceDate.
+- Accept glued dates like "29november" as 29 November.
+- If the user says "one way" / "one-way", set tripType to "one_way". If they give a date range on a one-way trip, still fill returnDate as the stay end / hotel checkout date.
+- If they say "round trip" / "return", set tripType to "round_trip".
+- If tripType is omitted, use round_trip when two dates exist, otherwise one_way.
+- IATA must be the primary commercial airport for the city (Kutaisi=KUT, Budapest=BUD, Tbilisi=TBS, Berlin=BER).
+- Do not invent cities that were not mentioned.
+- adults is null when unspecified.
+
+Examples:
+Input: "i want one way trip to budapest from 21 november to 29november from kutaisi"
+Output fields: originIata=KUT, destinationIata=BUD, departureDate≈2026-11-21, returnDate≈2026-11-29, tripType=one_way
+
+Input: "from 1 august to 6 august from tbilisi to berlin"
+Output: originIata=TBS, destinationIata=BER, tripType=round_trip`;
 
 export function buildParseTravelPrompt(
   prompt: string,
@@ -210,7 +330,8 @@ export function buildParseTravelPrompt(
       originCity: 'string | null',
       destinationCity: 'string | null',
       departureDate: 'YYYY-MM-DD | null',
-      returnDate: 'YYYY-MM-DD | null',
+      returnDate: 'YYYY-MM-DD | null — stay end / return flight date when present',
+      tripType: 'one_way | round_trip | null',
       adults: 'number | null',
       notes: 'string[] — parsing caveats',
     },

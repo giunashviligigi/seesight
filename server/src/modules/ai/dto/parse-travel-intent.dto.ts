@@ -39,6 +39,12 @@ export class ParseTravelIntentResponseDto {
   @ApiPropertyOptional({ nullable: true, type: String })
   returnDate!: string | null;
 
+  @ApiPropertyOptional({
+    nullable: true,
+    enum: ['one_way', 'round_trip'],
+  })
+  tripType!: 'one_way' | 'round_trip' | null;
+
   @ApiPropertyOptional({ nullable: true, type: Number })
   adults!: number | null;
 

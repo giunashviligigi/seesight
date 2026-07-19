@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -112,10 +113,24 @@ export class TripsController {
     return this.tripsService.cancel(user, id);
   }
 
+  @Delete(':id')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.EMPLOYEE)
+  @ApiOperation({
+    summary:
+      'Soft-delete trip (draft, pending, approved, rejected, or cancelled). Hidden from lists.',
+  })
+  @ApiOkResponse({ type: TripResponseDto })
+  remove(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+  ): Promise<TripResponseDto> {
+    return this.tripsService.remove(user, id);
+  }
+
   @Post(':id/approve')
   @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiOperation({
-    summary: 'Approve pending trip (self-approve forbidden)',
+    summary: 'Approve pending trip',
   })
   @ApiOkResponse({ type: TripResponseDto })
   approve(
@@ -129,7 +144,7 @@ export class TripsController {
   @Post(':id/reject')
   @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiOperation({
-    summary: 'Reject pending trip (self-approve forbidden)',
+    summary: 'Reject pending trip',
   })
   @ApiOkResponse({ type: TripResponseDto })
   reject(

@@ -44,6 +44,7 @@ export type ParseTravelIntentResponse = {
   destinationCity: string | null;
   departureDate: string | null;
   returnDate: string | null;
+  tripType?: "one_way" | "round_trip" | null;
   adults: number | null;
   source: "gemini" | "heuristic";
   notes: string[];

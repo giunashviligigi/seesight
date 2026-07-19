@@ -280,7 +280,7 @@ describe('TripsService', () => {
     expect(notifications.createMany).toHaveBeenCalled();
   });
 
-  it('blocks self-approve by trip creator', async () => {
+  it('allows company admin to approve their own trip', async () => {
     prisma.trip.findFirst.mockResolvedValue({
       ...baseTrip,
       createdByUserId: 'admin_1',
@@ -288,13 +288,61 @@ describe('TripsService', () => {
       travelers: [
         {
           ...baseTrip.travelers[0],
-          employee: { ...baseTrip.travelers[0].employee, userId: null },
+          employee: { ...baseTrip.travelers[0].employee, userId: 'admin_1' },
         },
       ],
     });
+    prisma.approval.findUnique.mockResolvedValue({
+      id: 'appr_1',
+      status: 'PENDING',
+    });
+    prisma.approval.update.mockResolvedValue({});
+    prisma.approvalAction.create.mockResolvedValue({});
+    prisma.trip.findUniqueOrThrow.mockResolvedValue({
+      ...baseTrip,
+      createdByUserId: 'admin_1',
+      status: TripStatus.APPROVED,
+      approval: {
+        id: 'appr_1',
+        status: 'APPROVED',
+        decidedAt: new Date(),
+      },
+    });
 
-    await expect(service.approve(admin, 'trip_1')).rejects.toThrow(
-      /cannot approve or reject your own trip/i,
+    const result = await service.approve(admin, 'trip_1', 'Self-managed');
+    expect(result.status).toBe(TripStatus.APPROVED);
+  });
+
+  it('soft-deletes a draft trip for its creator', async () => {
+    prisma.trip.findFirst.mockResolvedValue({
+      ...baseTrip,
+      createdByUserId: 'emp_user',
+      status: TripStatus.DRAFT,
+    });
+    prisma.approval.findUnique.mockResolvedValue(null);
+    prisma.trip.update.mockResolvedValue({
+      ...baseTrip,
+      deletedAt: new Date(),
+      status: TripStatus.DRAFT,
+    });
+
+    const result = await service.remove(employeeUser, 'trip_1');
+    expect(result.id).toBe('trip_1');
+    expect(prisma.trip.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ deletedAt: expect.any(Date) }),
+      }),
+    );
+  });
+
+  it('blocks delete of in-progress trips', async () => {
+    prisma.trip.findFirst.mockResolvedValue({
+      ...baseTrip,
+      status: TripStatus.IN_PROGRESS,
+    });
+
+    await expect(service.remove(employeeUser, 'trip_1')).rejects.toThrow(
+      /cannot be deleted/i,
     );
   });
 });

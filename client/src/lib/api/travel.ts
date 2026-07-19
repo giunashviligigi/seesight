@@ -36,7 +36,10 @@ export type HotelOffer = {
   checkOut: string;
   stars: number | null;
   rating: number | null;
+  /** Stay total for the full check-in → check-out period. */
   priceAmount: number | null;
+  pricePerNight?: number | null;
+  nights?: number;
   currency: string | null;
   amenities: string[];
   thumbnail: string | null;

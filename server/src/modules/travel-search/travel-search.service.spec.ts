@@ -178,6 +178,8 @@ describe('TravelSearchService', () => {
       hotelName: 'Berlin Central Inn',
       city: 'Berlin',
       priceAmount: 480,
+      nights: 4,
+      pricePerNight: 120,
       stars: 4,
       description: 'Central location near the station',
       address: '1 Mitte Street',

@@ -12,12 +12,16 @@ import { airportFromCityName, findAirportByIata } from "@/lib/airports";
 import { formatCountryLabel, normalizeCountryInput } from "@/lib/country";
 import { AppHeader, APPROVALS_UPDATED_EVENT } from "@/components/layout/app-header";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TripSearchWidget } from "@/components/travel/trip-search-widget";
 import {
   formatFlightClock,
   formatFlightDateTime,
+  formatHotelStayPrice,
+  formatNights,
+  nightsBetween,
 } from "@/lib/format-travel";
 
 function formatStatus(status: string) {
@@ -96,11 +100,19 @@ function SelectedItinerarySummary({ trip }: { trip: Trip }) {
                 {hotel.checkIn && hotel.checkOut
                   ? ` · ${hotel.checkIn} → ${hotel.checkOut}`
                   : ""}
+                {(() => {
+                  const nights = nightsBetween(hotel.checkIn, hotel.checkOut);
+                  const label = formatNights(nights);
+                  return label ? ` · ${label}` : "";
+                })()}
               </p>
               <p className="pt-1 font-medium text-ss-text">
-                {hotelPrice != null
-                  ? `${hotelPrice} ${hotel.currency ?? currency}`
-                  : "price n/a"}
+                {formatHotelStayPrice({
+                  priceAmount: hotelPrice,
+                  currency: hotel.currency ?? currency,
+                  checkIn: hotel.checkIn,
+                  checkOut: hotel.checkOut,
+                })}
               </p>
             </div>
           ) : (
@@ -134,6 +146,7 @@ export default function TripDetailPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   function applyTrip(next: Trip) {
     setTrip(next);
@@ -474,6 +487,20 @@ export default function TripDetailPage() {
               cancel
             </Button>
           ) : null}
+          {(trip.status === "DRAFT" ||
+            trip.status === "PENDING_APPROVAL" ||
+            trip.status === "APPROVED" ||
+            trip.status === "REJECTED" ||
+            trip.status === "CANCELLED") &&
+          token ? (
+            <Button
+              disabled={busy}
+              onClick={() => setDeleteOpen(true)}
+              className="rounded-full border border-red-400/40 bg-transparent px-4 text-red-300 lowercase hover:bg-red-400/10"
+            >
+              delete
+            </Button>
+          ) : null}
         </div>
 
         <div className="mt-8">
@@ -601,6 +628,39 @@ export default function TripDetailPage() {
           </dl>
         )}
       </section>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        title="delete this trip?"
+        description={`"${trip.purpose || "untitled trip"}" will be removed from your trip list. this cannot be undone from here.`}
+        confirmLabel="delete trip"
+        cancelLabel="keep trip"
+        busy={busy}
+        onCancel={() => {
+          if (busy) return;
+          setDeleteOpen(false);
+        }}
+        onConfirm={() => {
+          const accessToken = getStoredAccessToken();
+          if (!accessToken || busy) return;
+          void (async () => {
+            setBusy(true);
+            setError(null);
+            try {
+              await tripsApi.remove(trip.id, accessToken);
+              window.dispatchEvent(new Event(APPROVALS_UPDATED_EVENT));
+              router.push("/trips");
+            } catch (err) {
+              setError(
+                err instanceof ApiError
+                  ? err.message
+                  : "Unable to delete trip",
+              );
+              setBusy(false);
+            }
+          })();
+        }}
+      />
     </main>
   );
 }

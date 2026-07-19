@@ -427,10 +427,23 @@ export class TravelSearchService {
         : typeof property.hotel_class === 'number'
           ? property.hotel_class
           : null;
-    const priceAmount =
-      property.total_rate?.extracted_lowest ??
-      property.rate_per_night?.extracted_lowest ??
-      null;
+
+    const nights = nightsBetween(checkIn, checkOut);
+    const totalFromVendor = property.total_rate?.extracted_lowest ?? null;
+    const nightlyFromVendor = property.rate_per_night?.extracted_lowest ?? null;
+
+    // Always expose stay total so UI/itinerary totals are comparable.
+    let priceAmount: number | null = null;
+    let pricePerNight: number | null = null;
+    if (totalFromVendor != null) {
+      priceAmount = totalFromVendor;
+      pricePerNight =
+        nightlyFromVendor ??
+        Math.round((totalFromVendor / nights) * 100) / 100;
+    } else if (nightlyFromVendor != null) {
+      pricePerNight = nightlyFromVendor;
+      priceAmount = Math.round(nightlyFromVendor * nights * 100) / 100;
+    }
 
     const images = (property.images ?? [])
       .map((img) => img.original_image || img.thumbnail)
@@ -440,7 +453,9 @@ export class TravelSearchService {
     const summary = [
       property.name,
       stars ? `${stars}★` : null,
-      priceAmount != null ? `${priceAmount} ${currency}` : null,
+      priceAmount != null
+        ? `${priceAmount} ${currency} · ${nights} night${nights === 1 ? '' : 's'}`
+        : null,
     ]
       .filter(Boolean)
       .join(' · ');
@@ -456,6 +471,8 @@ export class TravelSearchService {
       stars,
       rating: property.overall_rating ?? null,
       priceAmount,
+      pricePerNight,
+      nights,
       currency,
       amenities: property.amenities ?? [],
       thumbnail,
@@ -471,6 +488,7 @@ export class TravelSearchService {
         overall_rating: property.overall_rating ?? null,
         rate_per_night: property.rate_per_night ?? null,
         total_rate: property.total_rate ?? null,
+        nights,
         amenities: property.amenities ?? [],
         description: property.description ?? null,
         address: property.address ?? null,
@@ -496,4 +514,13 @@ export class TravelSearchService {
       .digest('hex')
       .slice(0, 24);
   }
+}
+
+function nightsBetween(checkIn: string, checkOut: string): number {
+  const start = Date.parse(`${checkIn}T00:00:00.000Z`);
+  const end = Date.parse(`${checkOut}T00:00:00.000Z`);
+  if (Number.isNaN(start) || Number.isNaN(end) || end <= start) {
+    return 1;
+  }
+  return Math.max(1, Math.round((end - start) / 86_400_000));
 }

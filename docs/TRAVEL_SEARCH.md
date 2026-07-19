@@ -8,6 +8,7 @@ Flight and hotel search via **SerpAPI** (`google_flights` / `google_hotels`).
 |-------|--------|
 | Flights | SerpAPI `engine=google_flights` |
 | Hotels | SerpAPI `engine=google_hotels` |
+| Hotel price | Stay **total** for check-in → check-out. Prefer vendor `total_rate`; if only nightly rate exists, multiply by nights. UI shows night count (e.g. `4 nights`) + optional per-night average. |
 | Auth | Single `SERPAPI_API_KEY` |
 | Response shape | Normalized DTOs only — vendor keys never returned at top level |
 | Cache | In-memory TTL (~60s) for identical searches |
