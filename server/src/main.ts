@@ -11,11 +11,29 @@ async function bootstrap() {
 
   app.use(cookieParser());
 
-  const corsOrigin =
-    configService.get<string>('corsOrigin') ?? 'http://localhost:3000';
+  const allowedOrigins = (
+    configService.get<string>('corsOrigin') ?? 'http://localhost:3000'
+  )
+    .split(',')
+    .map((value) => value.trim().replace(/\/+$/, ''))
+    .filter(Boolean);
 
   app.enableCors({
-    origin: corsOrigin.split(',').map((value) => value.trim()),
+    origin: (
+      requestOrigin: string | undefined,
+      callback: (err: Error | null, allow?: boolean | string) => void,
+    ) => {
+      if (!requestOrigin) {
+        callback(null, true);
+        return;
+      }
+      const normalized = requestOrigin.replace(/\/+$/, '');
+      if (allowedOrigins.includes(normalized)) {
+        callback(null, requestOrigin);
+        return;
+      }
+      callback(null, false);
+    },
     credentials: true,
   });
 

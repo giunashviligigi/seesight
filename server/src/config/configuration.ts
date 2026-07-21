@@ -1,8 +1,33 @@
+function normalizeOrigin(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  return trimmed.replace(/\/+$/, '');
+}
+
+function resolveCorsOrigins(): string {
+  const fromCors = (process.env.CORS_ORIGIN ?? '')
+    .split(',')
+    .map((value) => normalizeOrigin(value))
+    .filter((value): value is string => Boolean(value));
+  const webOrigin = normalizeOrigin(process.env.WEB_ORIGIN);
+  const origins = [...fromCors];
+  if (webOrigin && !origins.includes(webOrigin)) {
+    origins.push(webOrigin);
+  }
+  if (origins.length === 0) {
+    origins.push('http://localhost:3000');
+  }
+  return origins.join(',');
+}
+
 export default () => ({
   port: parseInt(process.env.PORT ?? '3001', 10),
   databaseUrl: process.env.DATABASE_URL,
   nodeEnv: process.env.NODE_ENV ?? 'development',
-  corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:3000',
+  // Empty CORS_ORIGIN on Railway used to yield [""] and block every browser origin.
+  corsOrigin: resolveCorsOrigins(),
   jwt: {
     secret: process.env.JWT_SECRET ?? 'dev-only-change-me-seesight-jwt',
     expiresIn: process.env.JWT_EXPIRES_IN ?? '1d',
@@ -11,7 +36,7 @@ export default () => ({
     name: process.env.AUTH_COOKIE_NAME ?? 'seesight_access_token',
   },
   app: {
-    webOrigin: process.env.WEB_ORIGIN ?? 'http://localhost:3000',
+    webOrigin: normalizeOrigin(process.env.WEB_ORIGIN) ?? 'http://localhost:3000',
   },
   serpapi: {
     apiKey: process.env.SERPAPI_API_KEY ?? '',
