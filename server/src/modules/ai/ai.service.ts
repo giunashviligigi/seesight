@@ -40,10 +40,16 @@ import {
 } from './dto/parse-travel-intent.dto';
 import {
   PARSE_TRAVEL_SYSTEM,
+  applyClarificationAnswer,
+  applyStayNights,
   buildParseTravelPrompt,
+  extractStayNights,
+  finalizeTravelIntent,
   heuristicParseTravelIntent,
+  inferClarificationFocus,
+  type ClarificationFocus,
 } from './parse-travel-intent';
-import { resolveCityQuery } from './city-airports';
+import { resolvePlaceQuery } from './city-airports';
 
 @Injectable()
 export class AiService {
@@ -217,6 +223,7 @@ export class AiService {
     const referenceIso = toDateString(reference);
     const fallback = heuristicParseTravelIntent(dto.prompt, reference);
 
+    let parsed: ParseTravelIntentResponseDto;
     try {
       const maxOutputTokens =
         this.config.get<number>('ai.maxOutputTokens') ?? 1024;
@@ -232,19 +239,43 @@ export class AiService {
         temperature,
       });
 
-      const parsed = this.parseTravelIntentJson(generated.text, fallback);
-      return parsed;
+      parsed = this.parseTravelIntentJson(
+        generated.text,
+        fallback,
+        dto.prompt,
+      );
+      this.logger.log(
+        `Travel intent parsed via gemini: ${parsed.originIata ?? '?'}→${parsed.destinationIata ?? '?'} dates=${parsed.departureDate ?? '?'}..${parsed.returnDate ?? '?'} type=${parsed.tripType ?? '?'}`,
+      );
     } catch (error) {
       this.logger.warn(
         `Travel intent parse failed; using heuristic (${error instanceof Error ? error.message : 'unknown'})`,
       );
-      return fallback;
+      parsed = fallback;
     }
+
+    if (dto.clarificationAnswer?.trim()) {
+      const focus: ClarificationFocus | null =
+        dto.clarificationFocus ?? inferClarificationFocus(parsed);
+      parsed = applyClarificationAnswer(
+        parsed,
+        dto.clarificationAnswer,
+        focus,
+        reference,
+        dto.prompt,
+      );
+      this.logger.log(
+        `Applied clarification (${focus ?? 'auto'}): ${parsed.originIata ?? '?'}→${parsed.destinationIata ?? '?'} dates=${parsed.departureDate ?? '?'}`,
+      );
+    }
+
+    return parsed;
   }
 
   private parseTravelIntentJson(
     text: string,
     fallback: ParseTravelIntentResponseDto,
+    originalPrompt: string,
   ): ParseTravelIntentResponseDto {
     let obj: Record<string, unknown>;
     try {
@@ -260,18 +291,23 @@ export class AiService {
         ? obj.destinationCity.trim()
         : null;
 
+    // Prefer validating Gemini IATA against the global DB; fall back to city/country text.
     const originResolved =
       (typeof obj.originIata === 'string'
-        ? resolveCityQuery(obj.originIata)
-        : null) ?? (originCity ? resolveCityQuery(originCity) : null);
+        ? resolvePlaceQuery(obj.originIata)
+        : null) ?? (originCity ? resolvePlaceQuery(originCity) : null);
     const destinationResolved =
       (typeof obj.destinationIata === 'string'
-        ? resolveCityQuery(obj.destinationIata)
+        ? resolvePlaceQuery(obj.destinationIata)
         : null) ??
-      (destinationCity ? resolveCityQuery(destinationCity) : null);
+      (destinationCity ? resolvePlaceQuery(destinationCity) : null);
 
     const departureDate = asIsoDate(obj.departureDate) ?? fallback.departureDate;
-    const returnDate = asIsoDate(obj.returnDate) ?? fallback.returnDate;
+    const returnDate = applyStayNights(
+      departureDate,
+      asIsoDate(obj.returnDate) ?? fallback.returnDate,
+      extractStayNights(originalPrompt),
+    );
     const adults =
       typeof obj.adults === 'number' &&
       Number.isFinite(obj.adults) &&
@@ -292,8 +328,18 @@ export class AiService {
     const notes = Array.isArray(obj.notes)
       ? obj.notes.filter((n): n is string => typeof n === 'string')
       : [];
+    if (originResolved?.mappedFrom) notes.push(originResolved.mappedFrom);
+    if (destinationResolved?.mappedFrom) {
+      notes.push(destinationResolved.mappedFrom);
+    }
+    if (notes.length === 0) notes.push(...fallback.notes);
 
-    const result: ParseTravelIntentResponseDto = {
+    const modelQuestion =
+      typeof obj.clarifyingQuestion === 'string'
+        ? obj.clarifyingQuestion.trim()
+        : null;
+
+    const result = finalizeTravelIntent({
       originIata: originResolved?.iata ?? fallback.originIata,
       destinationIata: destinationResolved?.iata ?? fallback.destinationIata,
       originCity: originResolved?.city ?? originCity ?? fallback.originCity,
@@ -306,8 +352,9 @@ export class AiService {
       tripType,
       adults,
       source: 'gemini',
-      notes: notes.length > 0 ? notes : fallback.notes,
-    };
+      notes,
+      clarifyingQuestion: modelQuestion,
+    });
 
     if (!result.originIata && !result.destinationIata && !result.departureDate) {
       return fallback;
@@ -558,10 +605,16 @@ function toDateString(value: Date): string {
 function asIsoDate(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
-  const date = new Date(`${trimmed}T00:00:00.000Z`);
+  const padded = trimmed.replace(
+    /^(\d{4})-(\d{1,2})-(\d{1,2})$/,
+    (_, y, m, d) =>
+      `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
+  );
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(padded)) return null;
+  const date = new Date(`${padded}T00:00:00.000Z`);
   if (Number.isNaN(date.getTime())) return null;
-  return trimmed;
+  if (date.toISOString().slice(0, 10) !== padded) return null;
+  return padded;
 }
 
 function sanitizePolicy(

@@ -445,10 +445,16 @@ export class TravelSearchService {
       priceAmount = Math.round(nightlyFromVendor * nights * 100) / 100;
     }
 
-    const images = (property.images ?? [])
+    const imageEntries = property.images ?? [];
+    // List cards use light thumbnails; detail modal can use larger originals (capped).
+    const thumbnail =
+      imageEntries[0]?.thumbnail ||
+      imageEntries[0]?.original_image ||
+      null;
+    const images = imageEntries
       .map((img) => img.original_image || img.thumbnail)
-      .filter((url): url is string => Boolean(url));
-    const thumbnail = images[0] ?? property.images?.[0]?.thumbnail ?? null;
+      .filter((url): url is string => Boolean(url))
+      .slice(0, 8);
 
     const summary = [
       property.name,
@@ -493,7 +499,8 @@ export class TravelSearchService {
         description: property.description ?? null,
         address: property.address ?? null,
         link: property.link ?? null,
-        images,
+        thumbnail,
+        imageCount: images.length,
       },
     };
   }

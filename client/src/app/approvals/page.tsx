@@ -7,7 +7,8 @@ import { ApiError } from "@/lib/api/client";
 import { authApi, AuthUser, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
 import { approvalsApi, PendingApproval } from "@/lib/api/approvals";
 import { formatCountryLabel } from "@/lib/country";
-import { AppHeader, APPROVALS_UPDATED_EVENT } from "@/components/layout/app-header";
+import { APPROVALS_UPDATED_EVENT } from "@/components/layout/app-header";
+import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -96,9 +97,7 @@ export default function ApprovalsPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-10">
-      <AppHeader user={user} pendingApprovalsCount={total} />
-
+    <AppShell user={user} pendingApprovalsCount={total}>
       <section className="mt-12 rounded-3xl border border-white/15 bg-ss-surface p-8">
         <h1 className="text-3xl font-medium text-ss-text lowercase">approvals</h1>
         <p className="mt-2 text-sm text-ss-muted lowercase">
@@ -189,6 +188,6 @@ export default function ApprovalsPage() {
           </ul>
         )}
       </section>
-    </main>
+    </AppShell>
   );
 }

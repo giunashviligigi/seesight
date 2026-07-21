@@ -6,7 +6,7 @@ import { ApiError } from "@/lib/api/client";
 import { authApi, AuthUser, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
 import { employeesApi, Employee } from "@/lib/api/employees";
 import { formatCountryLabel } from "@/lib/country";
-import { AppHeader } from "@/components/layout/app-header";
+import { AppShell } from "@/components/layout/app-shell";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -59,9 +59,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-6 py-10">
-      <AppHeader user={user} />
-
+    <AppShell user={user}>
       <section className="mt-12 rounded-3xl border border-white/15 bg-ss-surface p-8">
         <h1 className="text-3xl font-medium text-ss-text lowercase">my profile</h1>
         <p className="mt-2 text-sm text-ss-muted lowercase">
@@ -119,6 +117,6 @@ export default function ProfilePage() {
           </dl>
         ) : null}
       </section>
-    </main>
+    </AppShell>
   );
 }

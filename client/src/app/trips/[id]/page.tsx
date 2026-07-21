@@ -10,7 +10,8 @@ import { approvalsApi, ApprovalHistory } from "@/lib/api/approvals";
 import { FlightOffer, HotelOffer } from "@/lib/api/travel";
 import { airportFromCityName, findAirportByIata } from "@/lib/airports";
 import { formatCountryLabel, normalizeCountryInput } from "@/lib/country";
-import { AppHeader, APPROVALS_UPDATED_EVENT } from "@/components/layout/app-header";
+import { APPROVALS_UPDATED_EVENT } from "@/components/layout/app-header";
+import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
@@ -225,9 +226,34 @@ export default function TripDetailPage() {
     }
   }
 
+  async function onExportInvoice() {
+    const access = getStoredAccessToken();
+    if (!access || !trip) return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const { blob, filename } = await tripsApi.downloadInvoice(trip.id, access);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setMessage("invoice downloaded.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Unable to export invoice");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function persistPurposeIfNeeded(token: string) {
     if (!trip) return trip;
     const nextPurpose = purpose.trim();
+    if (!nextPurpose) {
+      throw new ApiError("purpose of trip is required", 400);
+    }
     const current =
       !trip.purpose || trip.purpose === "New trip" ? "" : trip.purpose;
     if (nextPurpose === current) return trip;
@@ -238,6 +264,20 @@ export default function TripDetailPage() {
     );
     applyTrip(next);
     return next;
+  }
+
+  function assertCanSubmit(current: Trip) {
+    if (!purpose.trim()) {
+      throw new ApiError("purpose of trip is required", 400);
+    }
+    const hasFlight = current.flightOffers.some((o) => o.selected);
+    const hasHotel = current.hotelOffers.some((o) => o.selected);
+    if (!hasFlight) {
+      throw new ApiError("select a flight before submitting for approval", 400);
+    }
+    if (!hasHotel) {
+      throw new ApiError("select a hotel before submitting for approval", 400);
+    }
   }
 
   async function syncCriteriaFromSearch(criteria: {
@@ -302,11 +342,17 @@ export default function TripDetailPage() {
   const isAdmin = user.role === "COMPANY_ADMIN";
   const canEdit = EDITABLE.has(trip.status);
   const token = getStoredAccessToken();
+  const canExportInvoice =
+    trip.status === "APPROVED" ||
+    trip.status === "IN_PROGRESS" ||
+    trip.status === "COMPLETED";
+  const hasSelectedFlight = trip.flightOffers.some((o) => o.selected);
+  const hasSelectedHotel = trip.hotelOffers.some((o) => o.selected);
+  const canSubmit =
+    Boolean(purpose.trim()) && hasSelectedFlight && hasSelectedHotel;
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-10">
-      <AppHeader user={user} />
-
+    <AppShell user={user}>
       <section className="mt-12 rounded-3xl border border-white/15 bg-ss-surface p-8">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1">
@@ -318,12 +364,16 @@ export default function TripDetailPage() {
             </p>
             {canEdit ? (
               <div className="mt-3 space-y-2">
-                <Label className="lowercase text-ss-muted">purpose of trip</Label>
+                <Label className="lowercase text-ss-muted">
+                  purpose of trip <span className="text-red-300">*</span>
+                </Label>
                 <Input
+                  required
                   value={purpose}
                   onChange={(e) => setPurpose(e.target.value)}
                   placeholder="e.g. client workshop in berlin"
                   disabled={busy}
+                  maxLength={200}
                   className="h-11 rounded-xl border-white/20 bg-ss-surface-strong text-ss-text"
                 />
               </div>
@@ -361,18 +411,32 @@ export default function TripDetailPage() {
 
         <div className="mt-6 flex flex-wrap gap-2">
           {trip.status === "DRAFT" && token ? (
-            <Button
-              disabled={busy}
-              onClick={() =>
-                void runAction(async () => {
-                  await persistPurposeIfNeeded(token);
-                  return tripsApi.submit(trip.id, token);
-                }, "submitted for approval.")
-              }
-              className="rounded-full bg-ss-accent px-4 text-white lowercase hover:bg-ss-accent-hover"
-            >
-              submit
-            </Button>
+            <div className="w-full space-y-2">
+              <Button
+                disabled={busy || !canSubmit}
+                onClick={() =>
+                  void runAction(async () => {
+                    assertCanSubmit(trip);
+                    await persistPurposeIfNeeded(token);
+                    return tripsApi.submit(trip.id, token);
+                  }, "submitted for approval.")
+                }
+                className="rounded-full bg-ss-accent px-4 text-white lowercase hover:bg-ss-accent-hover disabled:opacity-50"
+              >
+                submit
+              </Button>
+              {!canSubmit ? (
+                <p className="text-xs text-ss-muted lowercase">
+                  {!purpose.trim()
+                    ? "add a purpose of trip before submitting."
+                    : !hasSelectedFlight && !hasSelectedHotel
+                      ? "select a flight and a hotel before submitting."
+                      : !hasSelectedFlight
+                        ? "select a flight before submitting."
+                        : "select a hotel before submitting."}
+                </p>
+              ) : null}
+            </div>
           ) : null}
           {trip.status === "PENDING_APPROVAL" && isAdmin && token ? (
             <div className="w-full space-y-3">
@@ -443,6 +507,15 @@ export default function TripDetailPage() {
               start
             </Button>
           ) : null}
+          {canExportInvoice && token ? (
+            <Button
+              disabled={busy}
+              onClick={() => void onExportInvoice()}
+              className="rounded-full border border-white/20 bg-transparent px-4 text-ss-text lowercase hover:bg-white/5"
+            >
+              export invoice
+            </Button>
+          ) : null}
           {trip.status === "IN_PROGRESS" && isAdmin && token ? (
             <Button
               disabled={busy}
@@ -487,12 +560,7 @@ export default function TripDetailPage() {
               cancel
             </Button>
           ) : null}
-          {(trip.status === "DRAFT" ||
-            trip.status === "PENDING_APPROVAL" ||
-            trip.status === "APPROVED" ||
-            trip.status === "REJECTED" ||
-            trip.status === "CANCELLED") &&
-          token ? (
+          {token ? (
             <Button
               disabled={busy}
               onClick={() => setDeleteOpen(true)}
@@ -661,6 +729,6 @@ export default function TripDetailPage() {
           })();
         }}
       />
-    </main>
+    </AppShell>
   );
 }

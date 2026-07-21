@@ -9,7 +9,7 @@ import {
   getStoredAccessToken,
   storeAccessToken,
 } from "@/lib/api/auth";
-import { AppHeader } from "@/components/layout/app-header";
+import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 
 export default function AccountPage() {
@@ -71,9 +71,7 @@ export default function AccountPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-6 py-10">
-      <AppHeader user={user} />
-
+    <AppShell user={user}>
       <section className="mt-16 rounded-3xl border border-white/15 bg-ss-surface p-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -115,6 +113,6 @@ export default function AccountPage() {
           </p>
         ) : null}
       </section>
-    </main>
+    </AppShell>
   );
 }

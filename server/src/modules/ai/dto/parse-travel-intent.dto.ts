@@ -1,4 +1,10 @@
-import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import {
+  IsIn,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ParseTravelIntentDto {
@@ -8,7 +14,7 @@ export class ParseTravelIntentDto {
   })
   @IsString()
   @MinLength(8)
-  @MaxLength(1000)
+  @MaxLength(2000)
   prompt!: string;
 
   @ApiPropertyOptional({
@@ -18,6 +24,25 @@ export class ParseTravelIntentDto {
   @IsOptional()
   @IsString()
   referenceDate?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Short answer to the previous clarifyingQuestion (e.g. "Tbilisi")',
+    example: 'Tbilisi',
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  clarificationAnswer?: string;
+
+  @ApiPropertyOptional({
+    description: 'Which missing field the clarificationAnswer should fill',
+    enum: ['origin', 'destination', 'departureDate'],
+  })
+  @IsOptional()
+  @IsIn(['origin', 'destination', 'departureDate'])
+  clarificationFocus?: 'origin' | 'destination' | 'departureDate';
 }
 
 export class ParseTravelIntentResponseDto {
@@ -53,4 +78,12 @@ export class ParseTravelIntentResponseDto {
 
   @ApiProperty({ type: [String] })
   notes!: string[];
+
+  @ApiPropertyOptional({
+    nullable: true,
+    type: String,
+    description:
+      'Natural-language follow-up when origin, destination, or departure date is still missing. Null when ready to search.',
+  })
+  clarifyingQuestion!: string | null;
 }

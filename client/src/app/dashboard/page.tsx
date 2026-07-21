@@ -7,7 +7,7 @@ import { ApiError } from "@/lib/api/client";
 import { authApi, AuthUser, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
 import { dashboardApi, DashboardSummary } from "@/lib/api/dashboard";
 import { formatCountryLabel } from "@/lib/country";
-import { AppHeader } from "@/components/layout/app-header";
+import { AppShell } from "@/components/layout/app-shell";
 
 function formatMoney(amount: number, currency: string) {
   try {
@@ -98,9 +98,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-10">
-      <AppHeader user={user} />
-
+    <AppShell user={user}>
       <section className="mt-12">
         <h1 className="text-3xl font-medium text-ss-text lowercase">dashboard</h1>
         <p className="mt-2 max-w-2xl text-sm text-ss-muted lowercase">
@@ -229,6 +227,6 @@ export default function DashboardPage() {
           </>
         ) : null}
       </section>
-    </main>
+    </AppShell>
   );
 }

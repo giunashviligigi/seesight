@@ -1,0 +1,7 @@
+node_modules
+npm-debug.log
+dist
+.env
+coverage
+src/modules/ai/data/airports-raw.csv
+src/modules/ai/data/countries-raw.csv

@@ -5,17 +5,13 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { authApi, AuthUser, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
-import { companiesApi } from "@/lib/api/companies";
 import { departmentsApi, Department } from "@/lib/api/departments";
-import { employeesApi } from "@/lib/api/employees";
 import { tripsApi, Trip, TripStatus } from "@/lib/api/trips";
-import { readCompanyBudgetPolicy } from "@/lib/budget-policy";
 import { formatCountryLabel } from "@/lib/country";
-import { AppHeader } from "@/components/layout/app-header";
+import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DateInput } from "@/components/ui/date-input";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 
@@ -56,7 +52,6 @@ export default function TripsPage() {
   const [departmentId, setDepartmentId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [tripPendingDelete, setTripPendingDelete] = useState<Trip | null>(null);
 
@@ -133,73 +128,6 @@ export default function TripsPage() {
     }
   }
 
-  async function onNewTrip() {
-    const token = getStoredAccessToken();
-    if (!token || !user || creating) return;
-    setCreating(true);
-    setError(null);
-    try {
-      let travelerId: string | null = null;
-      if (user.role === "EMPLOYEE") {
-        const profile = await employeesApi.me(token);
-        travelerId = profile.id;
-      } else {
-        try {
-          const profile = await employeesApi.me(token);
-          travelerId = profile.id;
-        } catch {
-          const roster = await employeesApi.list(
-            { page: 1, pageSize: 1, status: "ACTIVE" },
-            token,
-          );
-          travelerId = roster.items[0]?.id ?? null;
-        }
-      }
-      if (!travelerId) {
-        throw new ApiError(
-          "add at least one active employee before creating a trip",
-          400,
-        );
-      }
-
-      let budgetAmount: number | undefined;
-      let budgetCurrency: string | undefined;
-      try {
-        const company = await companiesApi.me(token);
-        const policy = readCompanyBudgetPolicy(company.policyJson);
-        budgetCurrency = policy.defaultBudgetCurrency;
-        if (policy.defaultBudgetLimit !== null) {
-          budgetAmount = policy.defaultBudgetLimit;
-        }
-      } catch {
-        // Budget policy is optional for draft creation.
-      }
-
-      const created = await tripsApi.create(
-        {
-          budgetAmount,
-          budgetCurrency,
-          travelers: [{ employeeId: travelerId, isPrimary: true }],
-        },
-        token,
-      );
-      router.push(`/trips/${created.id}`);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Unable to create trip");
-      setCreating(false);
-    }
-  }
-
-  function canDeleteTrip(trip: Trip) {
-    return (
-      trip.status === "DRAFT" ||
-      trip.status === "PENDING_APPROVAL" ||
-      trip.status === "APPROVED" ||
-      trip.status === "REJECTED" ||
-      trip.status === "CANCELLED"
-    );
-  }
-
   async function confirmDeleteTrip() {
     const trip = tripPendingDelete;
     const token = getStoredAccessToken();
@@ -239,9 +167,7 @@ export default function TripsPage() {
   const isEmployee = user.role === "EMPLOYEE";
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-10">
-      <AppHeader user={user} />
-
+    <AppShell user={user}>
       <section className="mt-12 rounded-3xl border border-white/15 bg-ss-surface p-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -253,11 +179,10 @@ export default function TripsPage() {
           </div>
           <Button
             type="button"
-            disabled={creating}
-            onClick={() => void onNewTrip()}
+            onClick={() => router.push("/trips/new")}
             className="h-10 rounded-full bg-ss-accent px-5 text-sm text-white lowercase hover:bg-ss-accent-hover"
           >
-            {creating ? "opening…" : "new trip"}
+            new trip
           </Button>
         </div>
 
@@ -348,16 +273,14 @@ export default function TripsPage() {
                     </div>
                   </div>
                 </Link>
-                {canDeleteTrip(trip) ? (
-                  <Button
-                    type="button"
-                    disabled={deletingId === trip.id}
-                    onClick={() => setTripPendingDelete(trip)}
-                    className="h-9 shrink-0 rounded-full border border-red-400/40 bg-transparent px-4 text-sm text-red-300 lowercase hover:bg-red-400/10"
-                  >
-                    {deletingId === trip.id ? "deleting…" : "delete"}
-                  </Button>
-                ) : null}
+                <Button
+                  type="button"
+                  disabled={deletingId === trip.id}
+                  onClick={() => setTripPendingDelete(trip)}
+                  className="h-9 shrink-0 rounded-full border border-red-400/40 bg-transparent px-4 text-sm text-red-300 lowercase hover:bg-red-400/10"
+                >
+                  {deletingId === trip.id ? "deleting…" : "delete"}
+                </Button>
               </li>
             ))}
           </ul>
@@ -413,6 +336,6 @@ export default function TripsPage() {
         }}
         onConfirm={() => void confirmDeleteTrip()}
       />
-    </main>
+    </AppShell>
   );
 }

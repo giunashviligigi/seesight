@@ -98,8 +98,26 @@ describe('TripsService', () => {
       },
     ],
     approval: null,
-    flightOfferSnapshots: [],
-    hotelOfferSnapshots: [],
+    flightOfferSnapshots: [
+      {
+        id: 'flight_1',
+        selected: true,
+        priceAmount: 400,
+        currency: 'EUR',
+        origin: 'TBS',
+        destination: 'BER',
+      },
+    ],
+    hotelOfferSnapshots: [
+      {
+        id: 'hotel_1',
+        selected: true,
+        priceAmount: 600,
+        currency: 'EUR',
+        hotelName: 'Hotel Berlin',
+        city: 'Berlin',
+      },
+    ],
   };
 
   beforeEach(async () => {
@@ -214,6 +232,29 @@ describe('TripsService', () => {
     const result = await service.submit(admin, 'trip_1');
     expect(result.status).toBe(TripStatus.PENDING_APPROVAL);
     expect(notifications.createMany).toHaveBeenCalled();
+  });
+
+  it('blocks submit without selected flight and hotel', async () => {
+    prisma.trip.findFirst.mockResolvedValue({
+      ...baseTrip,
+      flightOfferSnapshots: [],
+      hotelOfferSnapshots: [],
+    });
+
+    await expect(service.submit(admin, 'trip_1')).rejects.toThrow(
+      /select a flight/i,
+    );
+  });
+
+  it('blocks submit without purpose', async () => {
+    prisma.trip.findFirst.mockResolvedValue({
+      ...baseTrip,
+      purpose: '',
+    });
+
+    await expect(service.submit(admin, 'trip_1')).rejects.toThrow(
+      /purpose is required/i,
+    );
   });
 
   it('cancels trip and keeps it addressable', async () => {
@@ -335,14 +376,42 @@ describe('TripsService', () => {
     );
   });
 
-  it('blocks delete of in-progress trips', async () => {
+  it('soft-deletes an in-progress trip', async () => {
     prisma.trip.findFirst.mockResolvedValue({
       ...baseTrip,
+      createdByUserId: 'emp_user',
+      status: TripStatus.IN_PROGRESS,
+    });
+    prisma.approval.findUnique.mockResolvedValue(null);
+    prisma.trip.update.mockResolvedValue({
+      ...baseTrip,
+      deletedAt: new Date(),
       status: TripStatus.IN_PROGRESS,
     });
 
-    await expect(service.remove(employeeUser, 'trip_1')).rejects.toThrow(
-      /cannot be deleted/i,
+    const result = await service.remove(employeeUser, 'trip_1');
+    expect(result.id).toBe('trip_1');
+    expect(prisma.trip.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ deletedAt: expect.any(Date) }),
+      }),
     );
+  });
+
+  it('soft-deletes a completed trip', async () => {
+    prisma.trip.findFirst.mockResolvedValue({
+      ...baseTrip,
+      createdByUserId: 'emp_user',
+      status: TripStatus.COMPLETED,
+    });
+    prisma.approval.findUnique.mockResolvedValue(null);
+    prisma.trip.update.mockResolvedValue({
+      ...baseTrip,
+      deletedAt: new Date(),
+      status: TripStatus.COMPLETED,
+    });
+
+    const result = await service.remove(employeeUser, 'trip_1');
+    expect(result.id).toBe('trip_1');
   });
 });

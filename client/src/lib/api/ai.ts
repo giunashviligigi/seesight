@@ -48,6 +48,7 @@ export type ParseTravelIntentResponse = {
   adults: number | null;
   source: "gemini" | "heuristic";
   notes: string[];
+  clarifyingQuestion?: string | null;
 };
 
 export const aiApi = {
@@ -88,7 +89,12 @@ export const aiApi = {
   },
 
   parseTravelIntent(
-    body: { prompt: string; referenceDate?: string },
+    body: {
+      prompt: string;
+      referenceDate?: string;
+      clarificationAnswer?: string;
+      clarificationFocus?: "origin" | "destination" | "departureDate";
+    },
     accessToken?: string | null,
   ) {
     return apiRequest<ParseTravelIntentResponse>("/ai/parse-travel-intent", {

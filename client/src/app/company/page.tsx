@@ -11,7 +11,7 @@ import {
   readCompanyBudgetPolicy,
 } from "@/lib/budget-policy";
 import { formatCountryLabel, normalizeCountryInput } from "@/lib/country";
-import { AppHeader } from "@/components/layout/app-header";
+import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -203,9 +203,7 @@ export default function CompanySettingsPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-6 py-10">
-      <AppHeader user={user} />
-
+    <AppShell user={user}>
       <section className="mt-12 rounded-3xl border border-white/15 bg-ss-surface p-8">
         <h1 className="text-3xl font-medium text-ss-text lowercase">
           {company ? "company settings" : "create your company"}
@@ -322,6 +320,6 @@ export default function CompanySettingsPage() {
           </Button>
         </form>
       </section>
-    </main>
+    </AppShell>
   );
 }

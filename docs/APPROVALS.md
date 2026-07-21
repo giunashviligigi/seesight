@@ -40,6 +40,7 @@ Trip aliases remain: `POST /trips/:id/approve|reject|submit`.
 |--------|------|-------|
 | GET | `/notifications` | authenticated roles |
 | POST | `/notifications/read-all` | authenticated roles |
+| DELETE | `/notifications/clear-all` | authenticated roles — deletes all notifications for the current user |
 | PATCH | `/notifications/:id/read` | owner |
 
 ### Notification types

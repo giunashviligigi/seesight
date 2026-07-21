@@ -132,11 +132,11 @@
 
   body {
     @apply bg-background text-foreground antialiased;
+    background-color: var(--ss-bg-deep);
     background-image:
-      radial-gradient(ellipse 80% 50% at 50% 0%, var(--ss-bg-glow) 0%, transparent 55%),
-      radial-gradient(ellipse 70% 45% at 50% 55%, var(--ss-bg-mid) 0%, transparent 60%),
-      linear-gradient(180deg, var(--ss-bg-deep) 0%, var(--ss-bg-navy) 45%, var(--ss-bg-deep) 100%);
-    background-attachment: fixed;
+      radial-gradient(ellipse 80% 50% at 50% -10%, var(--ss-bg-glow) 0%, transparent 55%),
+      linear-gradient(180deg, var(--ss-bg-deep) 0%, var(--ss-bg-navy) 50%, var(--ss-bg-deep) 100%);
+    /* Avoid background-attachment: fixed — it forces full-page repaints on scroll. */
     min-height: 100vh;
   }
 }

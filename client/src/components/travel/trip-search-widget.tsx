@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { findAirportByIata, GEORGIA_ORIGIN_AIRPORTS } from "@/lib/airports";
+import { findAirportByIata, GEORGIA_ORIGIN_AIRPORTS, resolveAirportQuery } from "@/lib/airports";
 import {
   formatDuration,
   formatFlightClock,
@@ -66,6 +66,10 @@ function hotelImages(offer: HotelOffer): string[] {
   return [];
 }
 
+function hotelCardPhoto(offer: HotelOffer): string | null {
+  return offer.thumbnail ?? offer.images?.[0] ?? null;
+}
+
 export function TripSearchWidget({
   tripId,
   accessToken,
@@ -92,6 +96,21 @@ export function TripSearchWidget({
   );
   const [adults, setAdults] = useState("1");
   const [nlPrompt, setNlPrompt] = useState("");
+  const [nlConversation, setNlConversation] = useState<string | null>(null);
+  const [clarifyingQuestion, setClarifyingQuestion] = useState<string | null>(
+    null,
+  );
+  const [clarifyAnswer, setClarifyAnswer] = useState("");
+  const [intentDraft, setIntentDraft] = useState<{
+    originIata: string | null;
+    destinationIata: string | null;
+    originCity: string | null;
+    destinationCity: string | null;
+    departureDate: string | null;
+    returnDate: string | null;
+    tripType: "one_way" | "round_trip" | null;
+    adults: number | null;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
@@ -225,6 +244,304 @@ export function TripSearchWidget({
     }
   }
 
+  function softFillFromParsed(parsed: {
+    originIata: string | null;
+    destinationIata: string | null;
+    destinationCity: string | null;
+    departureDate: string | null;
+    returnDate: string | null;
+    tripType: "one_way" | "round_trip" | null;
+    adults: number | null;
+  }) {
+    if (parsed.originIata) setOrigin(parsed.originIata);
+    if (parsed.destinationIata) setDestination(parsed.destinationIata);
+    if (parsed.destinationCity) setCity(parsed.destinationCity);
+    if (parsed.departureDate) setDepart(parsed.departureDate);
+    if (parsed.returnDate) {
+      setRet(parsed.returnDate);
+      setTripType(parsed.tripType ?? "round_trip");
+    } else if (parsed.tripType) {
+      setTripType(parsed.tripType);
+    }
+    if (parsed.adults) setAdults(String(parsed.adults));
+  }
+
+  function mergeIntentDraft<T extends {
+    originIata: string | null;
+    destinationIata: string | null;
+    originCity: string | null;
+    destinationCity: string | null;
+    departureDate: string | null;
+    returnDate: string | null;
+    tripType: "one_way" | "round_trip" | null;
+    adults: number | null;
+    notes: string[];
+    clarifyingQuestion: string | null;
+  }>(parsed: T, draft: typeof intentDraft): T {
+    if (!draft) return parsed;
+    const merged = {
+      ...parsed,
+      originIata: parsed.originIata ?? draft.originIata,
+      destinationIata: parsed.destinationIata ?? draft.destinationIata,
+      originCity: parsed.originCity ?? draft.originCity,
+      destinationCity: parsed.destinationCity ?? draft.destinationCity,
+      departureDate: parsed.departureDate ?? draft.departureDate,
+      returnDate: parsed.returnDate ?? draft.returnDate,
+      tripType: parsed.tripType ?? draft.tripType,
+      adults: parsed.adults ?? draft.adults,
+    };
+    const ready =
+      Boolean(merged.originIata) &&
+      Boolean(merged.destinationIata) &&
+      Boolean(merged.departureDate) &&
+      merged.originIata !== merged.destinationIata;
+    return {
+      ...merged,
+      clarifyingQuestion: ready
+        ? null
+        : !merged.destinationIata
+          ? "Where do you want to go?"
+          : !merged.originIata
+            ? "Where are you departing from?"
+            : !merged.departureDate
+              ? "What departure date should we use? (for example 25 January)"
+              : merged.clarifyingQuestion,
+    };
+  }
+
+  function enrichConversation(
+    base: string,
+    focus: "origin" | "destination" | "departureDate",
+    answer: string,
+  ): string {
+    if (focus === "origin") return `${base}\nfrom ${answer}`.trim();
+    if (focus === "destination") return `${base}\nto ${answer}`.trim();
+    return `${base}\ndeparting ${answer}`.trim();
+  }
+
+  function saveIntentDraft(parsed: {
+    originIata: string | null;
+    destinationIata: string | null;
+    originCity: string | null;
+    destinationCity: string | null;
+    departureDate: string | null;
+    returnDate: string | null;
+    tripType: "one_way" | "round_trip" | null;
+    adults: number | null;
+  }) {
+    setIntentDraft({
+      originIata: parsed.originIata,
+      destinationIata: parsed.destinationIata,
+      originCity: parsed.originCity,
+      destinationCity: parsed.destinationCity,
+      departureDate: parsed.departureDate,
+      returnDate: parsed.returnDate,
+      tripType: parsed.tripType,
+      adults: parsed.adults,
+    });
+  }
+
+  async function parsePromptAndSearch(
+    promptText: string,
+    clarification?: {
+      answer: string;
+      focus: "origin" | "destination" | "departureDate";
+    },
+  ) {
+    let parsed = parseTravelPrompt(promptText);
+    parsed = mergeIntentDraft(parsed, intentDraft);
+
+    try {
+      const remote = await aiApi.parseTravelIntent(
+        {
+          prompt: promptText,
+          referenceDate: new Date().toISOString().slice(0, 10),
+          clarificationAnswer: clarification?.answer,
+          clarificationFocus: clarification?.focus,
+        },
+        accessToken,
+      );
+      parsed = {
+        originIata: remote.originIata ?? parsed.originIata,
+        destinationIata: remote.destinationIata ?? parsed.destinationIata,
+        originCity: remote.originCity ?? parsed.originCity,
+        destinationCity: remote.destinationCity ?? parsed.destinationCity,
+        departureDate: remote.departureDate ?? parsed.departureDate,
+        returnDate: remote.returnDate ?? parsed.returnDate,
+        tripType: remote.tripType ?? parsed.tripType,
+        adults: remote.adults ?? parsed.adults,
+        notes: remote.notes?.length ? remote.notes : parsed.notes,
+        clarifyingQuestion:
+          remote.clarifyingQuestion ?? parsed.clarifyingQuestion,
+      };
+      // Keep answers from earlier clarification rounds (API is stateless).
+      parsed = mergeIntentDraft(parsed, intentDraft);
+      if (clarification?.focus === "origin" && clarification.answer.trim()) {
+        const place = resolveAirportQuery(clarification.answer);
+        if (place && place.iata !== parsed.destinationIata) {
+          parsed = {
+            ...parsed,
+            originIata: place.iata,
+            originCity: place.city,
+          };
+        }
+      }
+      if (
+        clarification?.focus === "destination" &&
+        clarification.answer.trim()
+      ) {
+        const place = resolveAirportQuery(clarification.answer);
+        if (place && place.iata !== parsed.originIata) {
+          parsed = {
+            ...parsed,
+            destinationIata: place.iata,
+            destinationCity: place.city,
+          };
+        }
+      }
+      if (
+        clarification?.focus === "departureDate" &&
+        clarification.answer.trim() &&
+        !parsed.departureDate
+      ) {
+        // Server should have applied this; keep a client safety net via re-ask.
+        parsed = {
+          ...parsed,
+          clarifyingQuestion:
+            "What departure date should we use? (for example 25 January)",
+        };
+      }
+      parsed = mergeIntentDraft(parsed, {
+        originIata: parsed.originIata,
+        destinationIata: parsed.destinationIata,
+        originCity: parsed.originCity,
+        destinationCity: parsed.destinationCity,
+        departureDate: parsed.departureDate,
+        returnDate: parsed.returnDate,
+        tripType: parsed.tripType,
+        adults: parsed.adults,
+      });
+    } catch {
+      if (clarification?.answer.trim()) {
+        const answer = clarification.answer.trim();
+        if (clarification.focus === "origin") {
+          const place = resolveAirportQuery(answer);
+          if (place && place.iata !== parsed.destinationIata) {
+            parsed = {
+              ...parsed,
+              originIata: place.iata,
+              originCity: place.city,
+            };
+          }
+        } else if (clarification.focus === "destination") {
+          const place = resolveAirportQuery(answer);
+          if (place && place.iata !== parsed.originIata) {
+            parsed = {
+              ...parsed,
+              destinationIata: place.iata,
+              destinationCity: place.city,
+            };
+          }
+        }
+        parsed = mergeIntentDraft(parsed, {
+          originIata: parsed.originIata,
+          destinationIata: parsed.destinationIata,
+          originCity: parsed.originCity,
+          destinationCity: parsed.destinationCity,
+          departureDate: parsed.departureDate,
+          returnDate: parsed.returnDate,
+          tripType: parsed.tripType,
+          adults: parsed.adults,
+        });
+      }
+    }
+
+    softFillFromParsed(parsed);
+    saveIntentDraft(parsed);
+
+    const sameCity =
+      Boolean(parsed.originIata) &&
+      parsed.originIata === parsed.destinationIata;
+    if (sameCity) {
+      parsed = {
+        ...parsed,
+        originIata: null,
+        originCity: null,
+        clarifyingQuestion: "Where are you departing from?",
+        notes: [
+          ...parsed.notes,
+          "departure city was missing — ignored same-city origin matching the destination",
+        ],
+      };
+      softFillFromParsed(parsed);
+      saveIntentDraft(parsed);
+      setOrigin("");
+    }
+
+    if (!parsed.originIata || !parsed.destinationIata || !parsed.departureDate) {
+      if (!nlConversation) setNlConversation(promptText);
+      setClarifyingQuestion(
+        parsed.clarifyingQuestion ??
+          (!parsed.originIata
+            ? "Where are you departing from?"
+            : !parsed.departureDate
+              ? "What departure date should we use? (for example 25 January)"
+              : "Could you add a bit more detail so we can search flights and hotels?"),
+      );
+      setClarifyAnswer("");
+      setMessage(
+        "understood part of your trip — answer below to continue, or edit the fields.",
+      );
+      return;
+    }
+
+    setNlConversation(null);
+    setClarifyingQuestion(null);
+    setClarifyAnswer("");
+    setIntentDraft(null);
+
+    const nextOrigin = parsed.originIata;
+    const nextDestination = parsed.destinationIata;
+    const nextDepart = parsed.departureDate;
+    const nextReturn = parsed.returnDate ?? "";
+    const nextTripType: "one_way" | "round_trip" =
+      parsed.tripType ?? (nextReturn ? "round_trip" : "one_way");
+    const nextCity = parsed.destinationCity ?? city;
+    const nextAdults = String(parsed.adults ?? Math.max(1, Number(adults) || 1));
+
+    setOrigin(nextOrigin);
+    setDestination(nextDestination);
+    setDepart(nextDepart);
+    setRet(nextReturn);
+    setTripType(nextTripType);
+    setCity(nextCity);
+    setAdults(nextAdults);
+
+    const { nextFlights, nextHotels } = await runMarketSearch({
+      origin: nextOrigin,
+      destination: nextDestination,
+      depart: nextDepart,
+      ret: nextReturn,
+      city: nextCity,
+      adults: Number(nextAdults) || 1,
+      tripType: nextTripType,
+    });
+
+    const mappingNote = parsed.notes.find((n) => /→/.test(n));
+    setMessage(
+      `understood: ${parsed.originCity ?? nextOrigin} (${nextOrigin}) → ${parsed.destinationCity ?? nextDestination} (${nextDestination}) · ${nextDepart}${nextReturn ? ` to ${nextReturn}` : ""} · ${nextTripType === "round_trip" ? "round trip" : "one way"} · found ${nextFlights.length} flights and ${nextHotels.length} hotels${mappingNote ? ` · ${mappingNote}` : ""}`,
+    );
+  }
+
+  function clarificationFocusFromQuestion(
+    question: string | null,
+  ): "origin" | "destination" | "departureDate" {
+    const q = (question ?? "").toLowerCase();
+    if (/destin|want to go|which city or airport/.test(q)) return "destination";
+    if (/date|when/.test(q)) return "departureDate";
+    return "origin";
+  }
+
   async function onSuggestFromPrompt() {
     if (disabled || suggesting) return;
     const text = nlPrompt.trim();
@@ -238,71 +555,42 @@ export function TripSearchWidget({
     setSuggesting(true);
     setError(null);
     setMessage(null);
+    setClarifyingQuestion(null);
+    setNlConversation(null);
+    setIntentDraft(null);
 
     try {
-      let parsed = parseTravelPrompt(text);
-      try {
-        const remote = await aiApi.parseTravelIntent(
-          {
-            prompt: text,
-            referenceDate: new Date().toISOString().slice(0, 10),
-          },
-          accessToken,
-        );
-        parsed = {
-          originIata: remote.originIata ?? parsed.originIata,
-          destinationIata: remote.destinationIata ?? parsed.destinationIata,
-          originCity: remote.originCity ?? parsed.originCity,
-          destinationCity: remote.destinationCity ?? parsed.destinationCity,
-          departureDate: remote.departureDate ?? parsed.departureDate,
-          returnDate: remote.returnDate ?? parsed.returnDate,
-          tripType: remote.tripType ?? parsed.tripType,
-          adults: remote.adults ?? parsed.adults,
-          notes: remote.notes?.length ? remote.notes : parsed.notes,
-        };
-      } catch {
-        // Local heuristic is enough when parse API fails.
-      }
-
-      if (!parsed.originIata || !parsed.destinationIata || !parsed.departureDate) {
-        const detail =
-          parsed.notes.length > 0 ? ` (${parsed.notes.join("; ")})` : "";
-        setError(
-          `could not understand the trip${detail}. try e.g. "one way from kutaisi to budapest from 21 november to 29 november".`,
-        );
-        return;
-      }
-
-      const nextOrigin = parsed.originIata;
-      const nextDestination = parsed.destinationIata;
-      const nextDepart = parsed.departureDate;
-      const nextReturn = parsed.returnDate ?? "";
-      const nextTripType: "one_way" | "round_trip" =
-        parsed.tripType ?? (nextReturn ? "round_trip" : "one_way");
-      const nextCity = parsed.destinationCity ?? city;
-      const nextAdults = String(parsed.adults ?? Math.max(1, Number(adults) || 1));
-
-      setOrigin(nextOrigin);
-      setDestination(nextDestination);
-      setDepart(nextDepart);
-      setRet(nextReturn);
-      setTripType(nextTripType);
-      setCity(nextCity);
-      setAdults(nextAdults);
-
-      const { nextFlights, nextHotels } = await runMarketSearch({
-        origin: nextOrigin,
-        destination: nextDestination,
-        depart: nextDepart,
-        ret: nextReturn,
-        city: nextCity,
-        adults: Number(nextAdults) || 1,
-        tripType: nextTripType,
-      });
-
-      setMessage(
-        `understood: ${parsed.originCity ?? nextOrigin} → ${parsed.destinationCity ?? nextDestination} · ${nextDepart}${nextReturn ? ` to ${nextReturn}` : ""} · ${nextTripType === "round_trip" ? "round trip" : "one way"} · found ${nextFlights.length} flights and ${nextHotels.length} hotels`,
+      await parsePromptAndSearch(text);
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Could not suggest trips",
       );
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
+  async function onClarifyContinue() {
+    if (disabled || suggesting) return;
+    const answer = clarifyAnswer.trim();
+    if (answer.length < 2) {
+      setError("please answer the question above");
+      return;
+    }
+    const base = (nlConversation ?? nlPrompt).trim();
+    const focus = clarificationFocusFromQuestion(clarifyingQuestion);
+    const enriched = enrichConversation(base, focus, answer);
+
+    setNlConversation(enriched);
+    setSuggesting(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await parsePromptAndSearch(enriched, { answer, focus });
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -364,10 +652,18 @@ export function TripSearchWidget({
         <Label className="lowercase text-ss-muted">describe your trip</Label>
         <textarea
           value={nlPrompt}
-          onChange={(e) => setNlPrompt(e.target.value)}
+          onChange={(e) => {
+            setNlPrompt(e.target.value);
+            if (clarifyingQuestion) {
+              setClarifyingQuestion(null);
+              setNlConversation(null);
+              setClarifyAnswer("");
+              setIntentDraft(null);
+            }
+          }}
           disabled={disabled || suggesting}
           rows={3}
-          placeholder="i want one way trip to budapest from 21 november to 29 november from kutaisi"
+          placeholder='i want round trip from kutaisi to cyprus from 20 august to 25 august'
           className="mt-2 w-full resize-y rounded-2xl border border-white/15 bg-transparent px-4 py-3 text-sm lowercase text-ss-text placeholder:text-ss-muted focus:outline-none focus:ring-1 focus:ring-ss-accent"
         />
         <div className="mt-3 flex flex-wrap gap-3">
@@ -377,9 +673,40 @@ export function TripSearchWidget({
             onClick={() => void onSuggestFromPrompt()}
             className="h-11 rounded-full bg-ss-accent px-6 text-white lowercase hover:bg-ss-accent-hover"
           >
-            {suggesting ? "suggesting…" : "suggest flights & hotels"}
+            {suggesting && !clarifyingQuestion
+              ? "suggesting…"
+              : "suggest flights & hotels"}
           </Button>
         </div>
+
+        {clarifyingQuestion ? (
+          <div className="mt-4 rounded-2xl border border-ss-accent/40 bg-ss-accent/10 p-4">
+            <p className="text-sm lowercase text-ss-text">{clarifyingQuestion}</p>
+            <Input
+              value={clarifyAnswer}
+              onChange={(e) => setClarifyAnswer(e.target.value)}
+              disabled={disabled || suggesting}
+              placeholder="type your answer…"
+              className="mt-3 h-11 rounded-full border-white/20 bg-transparent px-4 text-ss-text lowercase placeholder:text-ss-muted"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void onClarifyContinue();
+                }
+              }}
+            />
+            <div className="mt-3 flex flex-wrap gap-3">
+              <Button
+                type="button"
+                disabled={disabled || suggesting}
+                onClick={() => void onClarifyContinue()}
+                className="h-11 rounded-full bg-ss-accent px-6 text-white lowercase hover:bg-ss-accent-hover"
+              >
+                {suggesting ? "continuing…" : "continue"}
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <form onSubmit={onSearch} className="space-y-4">
@@ -683,6 +1010,7 @@ export function TripSearchWidget({
                   {visibleHotels.map((offer) => {
                     const isCheapest = offer.id === cheapestHotelId;
                     const photos = hotelImages(offer);
+                    const cardPhoto = hotelCardPhoto(offer);
                     return (
                       <li
                         key={offer.id}
@@ -697,13 +1025,16 @@ export function TripSearchWidget({
                           className="block w-full text-left"
                           onClick={() => openHotelDetail(offer)}
                         >
-                          {photos[0] ? (
+                          {cardPhoto ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={photos[0]}
+                              src={cardPhoto}
                               alt={offer.hotelName}
+                              width={480}
+                              height={144}
                               className="h-36 w-full object-cover"
                               loading="lazy"
+                              decoding="async"
                               referrerPolicy="no-referrer"
                             />
                           ) : (
@@ -815,12 +1146,15 @@ export function TripSearchWidget({
                 <img
                   src={detailPhotos[hotelPhotoIndex] ?? detailPhotos[0]}
                   alt={`${hotelDetail.hotelName} photo ${hotelPhotoIndex + 1}`}
+                  width={800}
+                  height={288}
                   className="h-56 w-full rounded-2xl object-cover sm:h-72"
+                  decoding="async"
                   referrerPolicy="no-referrer"
                 />
                 {detailPhotos.length > 1 ? (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {detailPhotos.slice(0, 12).map((url, index) => (
+                    {detailPhotos.slice(0, 8).map((url, index) => (
                       <button
                         key={`${url}-${index}`}
                         type="button"
@@ -835,7 +1169,11 @@ export function TripSearchWidget({
                         <img
                           src={url}
                           alt=""
+                          width={80}
+                          height={56}
                           className="h-14 w-20 object-cover"
+                          loading="lazy"
+                          decoding="async"
                           referrerPolicy="no-referrer"
                         />
                       </button>

@@ -6,11 +6,10 @@ import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { authApi, AuthUser, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
 import { AppNotification, notificationsApi } from "@/lib/api/notifications";
-import {
-  AppHeader,
-  NOTIFICATIONS_UPDATED_EVENT,
-} from "@/components/layout/app-header";
+import { NOTIFICATIONS_UPDATED_EVENT } from "@/components/layout/app-header";
+import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 function notifyUnreadChanged() {
   window.dispatchEvent(new Event(NOTIFICATIONS_UPDATED_EVENT));
@@ -23,6 +22,8 @@ export default function NotificationsPage() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [clearOpen, setClearOpen] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   async function load(token: string) {
     const result = await notificationsApi.list({ page: 1, pageSize: 50 }, token);
@@ -83,6 +84,22 @@ export default function NotificationsPage() {
     }
   }
 
+  async function onClearAll() {
+    const token = getStoredAccessToken();
+    if (!token || clearing) return;
+    setClearing(true);
+    setError(null);
+    try {
+      await notificationsApi.clearAll(token);
+      setClearOpen(false);
+      await load(token);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Unable to clear notifications");
+    } finally {
+      setClearing(false);
+    }
+  }
+
   if (loading || !user) {
     return (
       <main className="flex min-h-screen items-center justify-center px-6">
@@ -92,9 +109,7 @@ export default function NotificationsPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-6 py-10">
-      <AppHeader user={user} unreadCount={unreadCount} />
-
+    <AppShell user={user} unreadCount={unreadCount}>
       <section className="mt-12 rounded-3xl border border-white/15 bg-ss-surface p-8">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -103,14 +118,25 @@ export default function NotificationsPage() {
               {unreadCount} unread · trip submit / approve / reject updates
             </p>
           </div>
-          {unreadCount > 0 ? (
-            <Button
-              onClick={() => void onMarkAll()}
-              className="rounded-full border border-white/20 bg-transparent px-4 text-ss-text lowercase hover:bg-white/5"
-            >
-              mark all read
-            </Button>
-          ) : null}
+          <div className="flex flex-wrap gap-2">
+            {unreadCount > 0 ? (
+              <Button
+                onClick={() => void onMarkAll()}
+                className="rounded-full border border-white/20 bg-transparent px-4 text-ss-text lowercase hover:bg-white/5"
+              >
+                mark all read
+              </Button>
+            ) : null}
+            {items.length > 0 ? (
+              <Button
+                onClick={() => setClearOpen(true)}
+                disabled={clearing}
+                className="rounded-full border border-red-400/40 bg-transparent px-4 text-red-300 lowercase hover:bg-red-400/10"
+              >
+                clear notifications
+              </Button>
+            ) : null}
+          </div>
         </div>
 
         {error ? (
@@ -164,6 +190,19 @@ export default function NotificationsPage() {
           </ul>
         )}
       </section>
-    </main>
+
+      <ConfirmDialog
+        open={clearOpen}
+        title="clear all notifications?"
+        description="this permanently removes every notification from your inbox. this cannot be undone."
+        confirmLabel={clearing ? "clearing…" : "clear notifications"}
+        cancelLabel="keep"
+        busy={clearing}
+        onCancel={() => {
+          if (!clearing) setClearOpen(false);
+        }}
+        onConfirm={() => void onClearAll()}
+      />
+    </AppShell>
   );
 }

@@ -132,14 +132,22 @@ export function AppHeader({
   }, [showApprovalsBadge, user.mustChangePassword, pathname]);
 
   return (
-    <header className={cn("flex items-center justify-between gap-4", className)}>
+    <header
+      className={cn(
+        "flex h-14 w-full shrink-0 items-center justify-between gap-6",
+        className,
+      )}
+    >
       <Link
         href={homeHref}
-        className="shrink-0 text-sm font-semibold tracking-[0.35em] text-ss-text uppercase"
+        className="shrink-0 text-sm font-semibold tracking-[0.28em] text-ss-text uppercase"
       >
         Seesight
       </Link>
-      <nav className="flex flex-wrap items-center justify-end gap-3">
+      <nav
+        className="flex h-9 flex-nowrap items-center justify-end gap-0.5 sm:gap-1"
+        aria-label="Main"
+      >
         {items.map((item) => {
           const active = isNavItemActive(pathname, item);
           const isNotifications = item.href === "/notifications";
@@ -149,15 +157,16 @@ export function AppHeader({
             : isApprovals
               ? pendingApprovalsCount
               : 0;
+          const showBadgeSlot = isNotifications || isApprovals;
 
           return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
-                "relative inline-flex items-center pr-1 text-sm lowercase transition-colors hover:text-ss-text",
+                "relative inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-full px-2.5 text-sm lowercase transition-colors hover:text-ss-text",
+                showBadgeSlot ? "pr-5" : null,
                 active ? "text-ss-text" : "text-ss-muted",
-                badgeCount > 0 && "pr-5",
               )}
               aria-current={active ? "page" : undefined}
               aria-label={
@@ -171,7 +180,7 @@ export function AppHeader({
               {item.label}
               {badgeCount > 0 ? (
                 <span
-                  className="absolute -top-1.5 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#ef4444] px-1 text-[10px] leading-none font-semibold text-white"
+                  className="absolute top-1 right-1 flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-[#ef4444] px-1 text-[10px] leading-none font-semibold text-white"
                   aria-hidden
                 >
                   {badgeCount > 99 ? "99+" : badgeCount}

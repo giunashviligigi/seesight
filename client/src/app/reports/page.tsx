@@ -5,7 +5,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { authApi, AuthUser, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
 import { reportsApi, ReportsSummary } from "@/lib/api/reports";
-import { AppHeader } from "@/components/layout/app-header";
+import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
@@ -164,9 +164,7 @@ export default function ReportsPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-10">
-      <AppHeader user={user} />
-
+    <AppShell user={user}>
       <section className="mt-12">
         <h1 className="text-3xl font-medium text-ss-text lowercase">reports</h1>
         <p className="mt-2 max-w-2xl text-sm text-ss-muted lowercase">
@@ -341,6 +339,6 @@ export default function ReportsPage() {
           </>
         ) : null}
       </section>
-    </main>
+    </AppShell>
   );
 }

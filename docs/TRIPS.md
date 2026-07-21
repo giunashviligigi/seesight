@@ -34,12 +34,12 @@ Invalid transitions return **400** with message `Invalid status transition from 
 
 | Topic | Choice |
 |-------|--------|
-| Create | Always starts as `DRAFT`. Requires ≥1 traveler (`TripTraveler`). |
+| Create | Always starts as `DRAFT`. Requires ≥1 traveler (`TripTraveler`) and a non-empty **purpose**. |
 | Group travel | Multiple employees; duplicate traveler ids rejected; primary auto-assigned if omitted. |
 | Edit lock | Editable in `DRAFT` and `REJECTED` only (locked while pending — M10). |
 | Cancel | Soft status only — row kept (`deletedAt` unused for cancel). Visible in list filters. |
-| Delete | Soft-delete via `deletedAt`. Allowed for `DRAFT`, `PENDING_APPROVAL`, `APPROVED`, `REJECTED`, `CANCELLED`. Closes open approvals. Hidden from lists. |
-| Submit | Creates/updates `Approval` (`PENDING`) + `ApprovalAction.SUBMIT`. |
+| Delete | Soft-delete via `deletedAt`. Allowed in **any** status including `IN_PROGRESS` and `COMPLETED`. Closes open approvals. Hidden from lists. |
+| Submit | Requires purpose + selected flight + selected hotel. Creates/updates `Approval` (`PENDING`) + `ApprovalAction.SUBMIT`. |
 | Employee scope | List/detail limited to trips they created or travel on; must include self when creating. |
 | Tenant | Company admin own company; super admin passes `companyId`. |
 | Department filter | Trips that include a traveler in the given department. |
@@ -60,12 +60,13 @@ Invalid transitions return **400** with message `Invalid status transition from 
 | POST | `/trips/:id/start` | SUPER_ADMIN, COMPANY_ADMIN |
 | POST | `/trips/:id/complete` | SUPER_ADMIN, COMPANY_ADMIN |
 | POST | `/trips/:id/reopen` | SUPER_ADMIN, COMPANY_ADMIN, EMPLOYEE |
+| GET | `/trips/:id/invoice` | SUPER_ADMIN, COMPANY_ADMIN, EMPLOYEE — **PDF** invoice after `APPROVED` / `IN_PROGRESS` / `COMPLETED`. Issuer: SeeSight (IBAN `GE24TB7431145061100139`). Bill-to: company `legalName` or `name`. |
 
 ## Frontend
 
 - `/trips` — history list + filters
 - `/trips/new` — create draft
-- `/trips/[id]` — detail, edit, lifecycle actions
+- `/trips/[id]` — detail, edit, lifecycle actions, **export invoice** (approved+)
 
 ## Seed
 

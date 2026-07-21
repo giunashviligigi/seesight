@@ -3,19 +3,23 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Param,
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCookieAuth,
   ApiOkResponse,
   ApiOperation,
+  ApiProduces,
   ApiTags,
 } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
+import type { Response } from 'express';
 import { CurrentUser, Roles } from '../auth/decorators/auth.decorators';
 import type { RequestUser } from '../auth/types/auth.types';
 import {
@@ -64,6 +68,28 @@ export class TripsController {
     @Query() query: ListTripsQueryDto,
   ): Promise<TripListResponseDto> {
     return this.tripsService.list(user, query);
+  }
+
+  @Get(':id/invoice')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.EMPLOYEE)
+  @ApiOperation({
+    summary:
+      'Export SeeSight invoice PDF for an approved (or later) trip — bill-to is the registered company',
+  })
+  @ApiProduces('application/pdf')
+  @Header('Cache-Control', 'no-store')
+  async exportInvoice(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const result = await this.tripsService.exportInvoice(user, id);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${result.filename}"`,
+    );
+    res.status(200).send(result.pdf);
   }
 
   @Get(':id')
@@ -117,7 +143,7 @@ export class TripsController {
   @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.EMPLOYEE)
   @ApiOperation({
     summary:
-      'Soft-delete trip (draft, pending, approved, rejected, or cancelled). Hidden from lists.',
+      'Soft-delete trip in any status (including in progress / completed). Hidden from lists.',
   })
   @ApiOkResponse({ type: TripResponseDto })
   remove(

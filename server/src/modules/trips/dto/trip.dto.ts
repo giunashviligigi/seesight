@@ -30,14 +30,14 @@ export class TripTravelerInputDto {
 }
 
 export class CreateTripDto {
-  @ApiPropertyOptional({
+  @ApiProperty({
     example: 'Client workshop in Berlin',
-    description: 'Optional; empty for booking-first drafts until the user fills it',
+    description: 'Required purpose of the business trip',
   })
-  @IsOptional()
   @IsString()
+  @MinLength(1)
   @MaxLength(200)
-  purpose?: string;
+  purpose!: string;
 
   @ApiPropertyOptional({
     example: 'Germany',
@@ -110,6 +110,7 @@ export class UpdateTripDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  @MinLength(1)
   @MaxLength(200)
   purpose?: string;
 

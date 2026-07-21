@@ -49,4 +49,11 @@ export const notificationsApi = {
       accessToken: authToken(accessToken),
     });
   },
+
+  clearAll(accessToken?: string | null) {
+    return apiRequest<{ deleted: number }>("/notifications/clear-all", {
+      method: "DELETE",
+      accessToken: authToken(accessToken),
+    });
+  },
 };

@@ -39,6 +39,20 @@ import {
   TripListResponseDto,
   TripResponseDto,
 } from './dto/trip-response.dto';
+import {
+  decimalToNumber,
+  pickMajorityCurrency,
+  roundMoney,
+} from '../../common/analytics/spend.utils';
+import {
+  INVOICEABLE_TRIP_STATUSES,
+  SEESIGHT_INVOICE_ISSUER,
+} from './invoice.constants';
+import {
+  buildInvoiceNumber,
+  renderTripInvoicePdf,
+  type InvoiceLineItem,
+} from './trip-invoice';
 
 /** Field edits + offer attach allowed only before submit / after rejection. */
 const EDITABLE_STATUSES: TripStatus[] = [
@@ -54,11 +68,13 @@ const CANCELABLE_STATUSES: TripStatus[] = [
   TripStatus.REJECTED,
 ];
 
-/** Soft-delete allowed before travel starts / after terminal cancel|reject. */
+/** Soft-delete allowed in any status (row hidden via deletedAt). */
 const DELETABLE_STATUSES: TripStatus[] = [
   TripStatus.DRAFT,
   TripStatus.PENDING_APPROVAL,
   TripStatus.APPROVED,
+  TripStatus.IN_PROGRESS,
+  TripStatus.COMPLETED,
   TripStatus.REJECTED,
   TripStatus.CANCELLED,
 ];
@@ -108,7 +124,7 @@ export class TripsService {
       data: {
         companyId,
         createdByUserId: actor.id,
-        purpose: (dto.purpose ?? '').trim().slice(0, 200),
+        purpose: this.requirePurpose(dto.purpose),
         destinationCountry: parseCountryCode(dto.destinationCountry),
         destinationCity: dto.destinationCity?.trim() || null,
         startDate: startOfUtcDay(new Date(startDate)),
@@ -193,6 +209,120 @@ export class TripsService {
     return this.toResponse(trip);
   }
 
+  /**
+   * Generate a SeeSight → company invoice PDF for an approved (or later) trip.
+   * Available to company admins and employees who can access the trip.
+   */
+  async exportInvoice(
+    actor: RequestUser,
+    id: string,
+  ): Promise<{ pdf: Buffer; filename: string }> {
+    const trip = await this.findAccessibleTrip(actor, id);
+
+    if (!INVOICEABLE_TRIP_STATUSES.includes(trip.status)) {
+      throw new BadRequestException(
+        'Invoice is available only after the trip is approved',
+      );
+    }
+
+    const company = await this.prisma.company.findFirst({
+      where: { id: trip.companyId, deletedAt: null },
+      select: {
+        name: true,
+        legalName: true,
+        country: true,
+        billingEmail: true,
+      },
+    });
+
+    if (!company) {
+      throw new NotFoundException('Company not found for this trip');
+    }
+
+    const invoiceDate = toDateString(new Date());
+    const approvalDate = trip.approval?.decidedAt
+      ? toDateString(trip.approval.decidedAt)
+      : null;
+
+    const lineItems: InvoiceLineItem[] = [];
+    const currencies: string[] = [];
+
+    for (const offer of trip.flightOfferSnapshots.filter((o) => o.selected)) {
+      const amount = decimalToNumber(offer.priceAmount);
+      if (amount === null) continue;
+      const currency = offer.currency?.trim() || trip.budgetCurrency || 'EUR';
+      const route =
+        offer.origin && offer.destination
+          ? `${offer.origin}→${offer.destination}`
+          : 'flight';
+      lineItems.push({
+        description: `Flight · ${route}`,
+        amount: roundMoney(amount),
+        currency,
+      });
+      currencies.push(currency);
+    }
+
+    for (const offer of trip.hotelOfferSnapshots.filter((o) => o.selected)) {
+      const amount = decimalToNumber(offer.priceAmount);
+      if (amount === null) continue;
+      const currency = offer.currency?.trim() || trip.budgetCurrency || 'EUR';
+      const hotel = offer.hotelName?.trim() || 'Hotel stay';
+      const city = offer.city?.trim();
+      lineItems.push({
+        description: city ? `Hotel · ${hotel} (${city})` : `Hotel · ${hotel}`,
+        amount: roundMoney(amount),
+        currency,
+      });
+      currencies.push(currency);
+    }
+
+    const currency =
+      currencies.length > 0
+        ? pickMajorityCurrency(currencies)
+        : trip.budgetCurrency || 'EUR';
+    const totalAmount = roundMoney(
+      lineItems.reduce((sum, item) => sum + item.amount, 0),
+    );
+
+    const destinationParts = [
+      trip.destinationCity,
+      trip.destinationCountry,
+    ].filter(Boolean);
+    const travelers = trip.travelers.map((t) => {
+      const name = `${t.employee.firstName} ${t.employee.lastName}`.trim();
+      return t.isPrimary ? `${name} (primary)` : name;
+    });
+
+    const invoiceNumber = buildInvoiceNumber(trip.id, invoiceDate);
+    const pdf = await renderTripInvoicePdf({
+      invoiceNumber,
+      invoiceDate,
+      approvalDate,
+      issuerName: SEESIGHT_INVOICE_ISSUER.legalName,
+      issuerBankIban: SEESIGHT_INVOICE_ISSUER.bankIban,
+      billToName: (company.legalName?.trim() || company.name).trim(),
+      billToCountry: company.country,
+      billToBillingEmail: company.billingEmail,
+      tripId: trip.id,
+      tripPurpose: trip.purpose,
+      tripDestination:
+        destinationParts.length > 0 ? destinationParts.join(', ') : 'TBD',
+      tripStartDate: toDateString(trip.startDate),
+      tripEndDate: toDateString(trip.endDate),
+      tripStatus: trip.status,
+      travelers,
+      lineItems,
+      totalAmount,
+      currency,
+    });
+
+    return {
+      pdf,
+      filename: `seesight-invoice-${invoiceNumber.toLowerCase()}.pdf`,
+    };
+  }
+
   async update(
     actor: RequestUser,
     id: string,
@@ -244,7 +374,7 @@ export class TripsService {
         where: { id: trip.id },
         data: {
           ...(dto.purpose !== undefined
-            ? { purpose: dto.purpose.trim() }
+            ? { purpose: this.requirePurpose(dto.purpose) }
             : {}),
           ...(dto.destinationCountry !== undefined
             ? {
@@ -281,10 +411,7 @@ export class TripsService {
     const trip = await this.findAccessibleTrip(actor, id);
     this.assertCanMutateTrip(actor, trip);
     this.assertTransition(trip.status, TripStatus.PENDING_APPROVAL);
-
-    if (trip.travelers.length < 1) {
-      throw new BadRequestException('Trip requires at least one traveler');
-    }
+    this.assertReadyForSubmit(trip);
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const next = await tx.trip.update({
@@ -383,7 +510,7 @@ export class TripsService {
 
     if (!DELETABLE_STATUSES.includes(trip.status)) {
       throw new BadRequestException(
-        `Trip cannot be deleted while status is ${trip.status}. Cancel it first if needed.`,
+        `Trip cannot be deleted while status is ${trip.status}`,
       );
     }
 
@@ -887,6 +1014,36 @@ export class TripsService {
     if (!travelers.some((t) => t.employeeId === employee.id)) {
       throw new BadRequestException(
         'Employees must include themselves as a traveler',
+      );
+    }
+  }
+
+  private requirePurpose(raw: string | undefined | null): string {
+    const purpose = (raw ?? '').trim().slice(0, 200);
+    if (!purpose || purpose.toLowerCase() === 'new trip') {
+      throw new BadRequestException('Trip purpose is required');
+    }
+    return purpose;
+  }
+
+  private assertReadyForSubmit(trip: TripRecord): void {
+    if (trip.travelers.length < 1) {
+      throw new BadRequestException('Trip requires at least one traveler');
+    }
+
+    this.requirePurpose(trip.purpose);
+
+    const hasSelectedFlight = trip.flightOfferSnapshots.some((o) => o.selected);
+    const hasSelectedHotel = trip.hotelOfferSnapshots.some((o) => o.selected);
+
+    if (!hasSelectedFlight) {
+      throw new BadRequestException(
+        'Select a flight before submitting for approval',
+      );
+    }
+    if (!hasSelectedHotel) {
+      throw new BadRequestException(
+        'Select a hotel before submitting for approval',
       );
     }
   }

@@ -124,6 +124,13 @@ export class NotificationsService {
     return { updated: result.count };
   }
 
+  async clearAll(actor: RequestUser): Promise<{ deleted: number }> {
+    const result = await this.prisma.notification.deleteMany({
+      where: { userId: actor.id },
+    });
+    return { deleted: result.count };
+  }
+
   private toResponse(notification: Notification): NotificationResponseDto {
     return {
       id: notification.id,

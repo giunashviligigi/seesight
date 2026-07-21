@@ -1,4 +1,4 @@
-import { apiRequest } from "./client";
+import { API_BASE_URL, ApiError, apiRequest } from "./client";
 import { getStoredAccessToken } from "./auth";
 
 export type TripStatus =
@@ -81,7 +81,7 @@ export type TripTravelerInput = {
 };
 
 export type CreateTripInput = {
-  purpose?: string;
+  purpose: string;
   destinationCountry?: string;
   destinationCity?: string;
   startDate?: string;
@@ -256,5 +256,36 @@ export const tripsApi = {
       body: input,
       accessToken: authToken(accessToken),
     });
+  },
+
+  async downloadInvoice(id: string, accessToken?: string | null) {
+    const token = authToken(accessToken);
+    const response = await fetch(`${API_BASE_URL}/trips/${id}/invoice`, {
+      method: "GET",
+      headers: {
+        Accept: "application/pdf",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      let message = "Unable to export invoice";
+      try {
+        const data = JSON.parse(text) as { message?: string | string[] };
+        if (typeof data.message === "string") message = data.message;
+        else if (Array.isArray(data.message)) message = data.message.join(", ");
+      } catch {
+        // keep default
+      }
+      throw new ApiError(message, response.status, text);
+    }
+
+    const blob = await response.blob();
+    const disposition = response.headers.get("Content-Disposition") ?? "";
+    const match = /filename="([^"]+)"/.exec(disposition);
+    const filename = match?.[1] ?? `seesight-invoice-${id}.pdf`;
+    return { blob, filename };
   },
 };

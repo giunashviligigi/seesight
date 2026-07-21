@@ -9,7 +9,7 @@ import { companiesApi } from "@/lib/api/companies";
 import { departmentsApi, Department } from "@/lib/api/departments";
 import { employeesApi, Employee } from "@/lib/api/employees";
 import { normalizeCountryInput } from "@/lib/country";
-import { AppHeader } from "@/components/layout/app-header";
+import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -355,9 +355,7 @@ function EmployeesPageContent() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-6 py-10">
-      <AppHeader user={user} />
-
+    <AppShell user={user} contentClassName="max-w-6xl">
       <section className="mt-12 rounded-3xl border border-white/15 bg-ss-surface p-8">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -735,7 +733,7 @@ function EmployeesPageContent() {
           </form>
         </div>
       </section>
-    </main>
+    </AppShell>
   );
 }
 

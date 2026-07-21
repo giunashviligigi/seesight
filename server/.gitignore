@@ -3,3 +3,7 @@ node_modules
 .env
 
 /generated/prisma
+
+# OurAirports source CSVs (regenerate airports.json via scripts/build-airports-json.js)
+src/modules/ai/data/airports-raw.csv
+src/modules/ai/data/countries-raw.csv

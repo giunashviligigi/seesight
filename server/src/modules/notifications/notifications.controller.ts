@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCookieAuth,
@@ -47,6 +47,21 @@ export class NotificationsController {
     @CurrentUser() user: RequestUser,
   ): Promise<{ updated: number }> {
     return this.notificationsService.markAllRead(user);
+  }
+
+  @Delete('clear-all')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.EMPLOYEE)
+  @ApiOperation({ summary: 'Delete all notifications for the current user' })
+  @ApiOkResponse({
+    schema: {
+      type: 'object',
+      properties: { deleted: { type: 'number' } },
+    },
+  })
+  clearAll(
+    @CurrentUser() user: RequestUser,
+  ): Promise<{ deleted: number }> {
+    return this.notificationsService.clearAll(user);
   }
 
   @Patch(':id/read')
