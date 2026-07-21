@@ -49,7 +49,7 @@ server/src/
     └── reports/          # Travel analytics + CSV export (M11)
 ```
 
-Business modules follow Controller → Service → DTO conventions from `AGENTS.md`.
+Business modules follow Controller → Service → DTO conventions with validation and Swagger.
 
 ## External integrations
 
