@@ -22,7 +22,7 @@ Built as a Bachelor's Thesis with a production-style monorepo (Next.js + NestJS 
 | Reports + CSV export | Done |
 | Trip PDF invoices | Done |
 | Docker Compose local stack | Done |
-| Public cloud deploy (e.g. Railway) | In progress |
+| Public cloud deploy (Railway + custom domain) | Done |
 
 ---
 
@@ -102,13 +102,77 @@ Seed accounts and ERD: [`docs/DATABASE.md`](docs/DATABASE.md).
 - `JWT_*` / auth secrets — see `.env.example`  
 - `SERPAPI_API_KEY` — flights & hotels  
 - `GEMINI_API_KEY` + `AI_PROVIDER=gemini` — AI parse & recommendations  
-- `CORS_ORIGIN` — frontend origin (e.g. `http://localhost:3000`)
+- `CORS_ORIGIN` / `WEB_ORIGIN` — frontend origin(s), comma-separated if needed (no trailing slash)
+- Empty `CORS_ORIGIN` is ignored; `WEB_ORIGIN` is always merged into the allow-list
 
 **Client**
 
-- `NEXT_PUBLIC_API_URL` — API base URL (e.g. `http://localhost:3001`)
+- `NEXT_PUBLIC_API_URL` — API base URL (baked in at **build** time)
 
 Never commit real `.env` files.
+
+---
+
+## Production deploy (Railway)
+
+SeeSight runs on **Railway** as three services from this monorepo:
+
+| Service | Root directory | Role |
+|---------|----------------|------|
+| **Postgres** | — | Managed PostgreSQL |
+| **api** | `server` | NestJS (`railway.toml`, Railpack) |
+| **web** | `client` | Next.js |
+
+Deploy branch: **`main`** (keep `development` for day-to-day work, then merge to `main`).
+
+### API (server)
+
+- **Build:** `npm ci && npx prisma generate && npm run build`
+- **Pre-deploy:** `npx prisma migrate deploy` (applies migrations; does **not** seed users)
+- **Start:** `node dist/src/main.js`
+- **Health:** `GET /health`
+- **Swagger:** `/docs`
+
+Required variables (api):
+
+| Variable | Notes |
+|----------|--------|
+| `DATABASE_URL` | Railway Postgres connection (private URL / variable reference) |
+| `JWT_SECRET` | Strong secret in production |
+| `CORS_ORIGIN` | Exact web origin, e.g. `https://test.seesight.net` |
+| `WEB_ORIGIN` | Same as web origin (used for CORS + app links) |
+| `SERPAPI_API_KEY` | Flights / hotels |
+| `GEMINI_API_KEY` | AI parse & recommendations |
+| `AI_PROVIDER` | `gemini` |
+| `NODE_ENV` | `production` |
+
+### Web (client)
+
+Required variables (web):
+
+| Variable | Notes |
+|----------|--------|
+| `NEXT_PUBLIC_API_URL` | Public API URL, e.g. `https://api-test.seesight.net` |
+
+Change this → **redeploy web** (value is compiled into the client).
+
+### Custom domain (example)
+
+| Hostname | Service |
+|----------|---------|
+| `test.seesight.net` | web |
+| `api-test.seesight.net` | api |
+
+1. Add each hostname under Railway → service → **Custom Domain** (CNAME **and** TXT verification).
+2. Publish those records at your DNS host (e.g. **Cloudflare**). If the registrar (e.g. Cloud9) only offers nameservers, point NS to Cloudflare and manage records there.
+3. Prefer Cloudflare **DNS only** (grey cloud) for Railway CNAMEs; wait for NS propagation if the site does not resolve yet.
+4. Set `CORS_ORIGIN` / `WEB_ORIGIN` / `NEXT_PUBLIC_API_URL` to the HTTPS custom hosts (no trailing slash), then redeploy **api** and **web**.
+
+Redeploying does **not** wipe Postgres data; only new Prisma migrations change the schema.
+
+### First production admin
+
+Migrate ≠ seed. Create a `SUPER_ADMIN` once (Railway api shell / one-off script), or run seed only if you intentionally want demo users.
 
 ---
 
@@ -143,4 +207,4 @@ Never commit real `.env` files.
 
 ## Thesis note
 
-SeeSight Business is developed as a **Bachelor's Thesis** project, demonstrating a full-stack SaaS architecture with real vendor integrations (SerpAPI, Gemini), multi-tenant RBAC, and Dockerized deployment.
+SeeSight Business is developed as a **Bachelor's Thesis** project, demonstrating a full-stack SaaS architecture with real vendor integrations (SerpAPI, Gemini), multi-tenant RBAC, Dockerized local development, and a live Railway deployment with custom domains.
