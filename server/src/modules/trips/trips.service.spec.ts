@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
-import { TripStatus, UserRole, UserStatus } from '@prisma/client';
+import { TripStatus, UserRole, UserStatus, BookingMode } from '@prisma/client';
 import { TripsService } from './trips.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -82,6 +82,7 @@ describe('TripsService', () => {
     budgetAmount: 1800,
     budgetCurrency: 'EUR',
     notes: null,
+    bookingMode: BookingMode.BOTH,
     status: TripStatus.DRAFT,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -245,6 +246,94 @@ describe('TripsService', () => {
   it('blocks submit without selected flight and hotel', async () => {
     prisma.trip.findFirst.mockResolvedValue({
       ...baseTrip,
+      flightOfferSnapshots: [],
+      hotelOfferSnapshots: [],
+    });
+
+    await expect(service.submit(admin, 'trip_1')).rejects.toThrow(
+      /select a flight/i,
+    );
+  });
+
+  it('allows flights-only submit without a hotel', async () => {
+    prisma.trip.findFirst.mockResolvedValue({
+      ...baseTrip,
+      bookingMode: BookingMode.FLIGHTS,
+      hotelOfferSnapshots: [],
+    });
+    prisma.trip.update.mockResolvedValue({
+      ...baseTrip,
+      bookingMode: BookingMode.FLIGHTS,
+      hotelOfferSnapshots: [],
+      status: TripStatus.PENDING_APPROVAL,
+    });
+    prisma.approval.findUnique.mockResolvedValue(null);
+    prisma.approval.create.mockResolvedValue({
+      id: 'appr_1',
+      status: 'PENDING',
+    });
+    prisma.approvalAction.create.mockResolvedValue({});
+    prisma.trip.findUniqueOrThrow.mockResolvedValue({
+      ...baseTrip,
+      bookingMode: BookingMode.FLIGHTS,
+      hotelOfferSnapshots: [],
+      status: TripStatus.PENDING_APPROVAL,
+      approval: { id: 'appr_1', status: 'PENDING', decidedAt: null },
+    });
+    prisma.user.findMany.mockResolvedValue([{ id: 'admin_1' }]);
+
+    const result = await service.submit(admin, 'trip_1');
+    expect(result.status).toBe(TripStatus.PENDING_APPROVAL);
+  });
+
+  it('allows hotels-only submit without a flight', async () => {
+    prisma.trip.findFirst.mockResolvedValue({
+      ...baseTrip,
+      bookingMode: BookingMode.HOTELS,
+      flightOfferSnapshots: [],
+    });
+    prisma.trip.update.mockResolvedValue({
+      ...baseTrip,
+      bookingMode: BookingMode.HOTELS,
+      flightOfferSnapshots: [],
+      status: TripStatus.PENDING_APPROVAL,
+    });
+    prisma.approval.findUnique.mockResolvedValue(null);
+    prisma.approval.create.mockResolvedValue({
+      id: 'appr_1',
+      status: 'PENDING',
+    });
+    prisma.approvalAction.create.mockResolvedValue({});
+    prisma.trip.findUniqueOrThrow.mockResolvedValue({
+      ...baseTrip,
+      bookingMode: BookingMode.HOTELS,
+      flightOfferSnapshots: [],
+      status: TripStatus.PENDING_APPROVAL,
+      approval: { id: 'appr_1', status: 'PENDING', decidedAt: null },
+    });
+    prisma.user.findMany.mockResolvedValue([{ id: 'admin_1' }]);
+
+    const result = await service.submit(admin, 'trip_1');
+    expect(result.status).toBe(TripStatus.PENDING_APPROVAL);
+  });
+
+  it('blocks hotels-only submit without a hotel', async () => {
+    prisma.trip.findFirst.mockResolvedValue({
+      ...baseTrip,
+      bookingMode: BookingMode.HOTELS,
+      flightOfferSnapshots: [],
+      hotelOfferSnapshots: [],
+    });
+
+    await expect(service.submit(admin, 'trip_1')).rejects.toThrow(
+      /select a hotel/i,
+    );
+  });
+
+  it('blocks flights-only submit without a flight', async () => {
+    prisma.trip.findFirst.mockResolvedValue({
+      ...baseTrip,
+      bookingMode: BookingMode.FLIGHTS,
       flightOfferSnapshots: [],
       hotelOfferSnapshots: [],
     });

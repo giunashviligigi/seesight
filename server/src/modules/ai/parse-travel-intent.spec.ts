@@ -2,6 +2,7 @@ import {
   applyClarificationAnswer,
   finalizeTravelIntent,
   heuristicParseTravelIntent,
+  preferConfirmedDraft,
 } from './parse-travel-intent';
 import { resolvePlaceQuery } from './city-airports';
 
@@ -44,6 +45,8 @@ describe('heuristicParseTravelIntent', () => {
     expect(result.departureDate).toBe('2026-11-21');
     expect(result.returnDate).toBe('2026-11-29');
     expect(result.tripType).toBe('one_way');
+    expect(result.hotelNights).toBe(8);
+    expect(result.clarifyingQuestion).toBeNull();
     expect(result.source).toBe('heuristic');
   });
 
@@ -120,9 +123,10 @@ describe('heuristicParseTravelIntent', () => {
     expect(result.destinationIata).toBe('FCO');
     expect(result.departureDate).toBe('2026-07-20');
     expect(result.tripType).toBe('one_way');
+    expect(result.clarifyingQuestion).toMatch(/hotel nights/i);
   });
 
-  it('parses US month-first single date with one-way', () => {
+  it('parses US month-first single date with one-way and asks for hotel nights', () => {
     const result = heuristicParseTravelIntent(
       'Need a one-way flight from Tbilisi to Paris on September 15',
       reference,
@@ -132,7 +136,8 @@ describe('heuristicParseTravelIntent', () => {
     expect(result.destinationIata).toBe('CDG');
     expect(result.departureDate).toBe('2026-09-15');
     expect(result.tripType).toBe('one_way');
-    expect(result.clarifyingQuestion).toBeNull();
+    expect(result.hotelNights).toBeNull();
+    expect(result.clarifyingQuestion).toMatch(/hotel nights/i);
   });
 
   it('asks for departure city when destination and stay nights exist without origin/date', () => {
@@ -146,6 +151,7 @@ describe('heuristicParseTravelIntent', () => {
     expect(result.adults).toBe(2);
     expect(result.departureDate).toBeNull();
     expect(result.tripType).toBe('one_way');
+    expect(result.hotelNights).toBe(5);
     expect(result.clarifyingQuestion).toMatch(/departing from/i);
   });
 
@@ -162,7 +168,7 @@ describe('heuristicParseTravelIntent', () => {
     expect(result.clarifyingQuestion).toMatch(/departing from/i);
   });
 
-  it('infers hotel checkout from nights once departure is known', () => {
+  it('infers hotel nights from stay phrase and is ready when complete', () => {
     const result = heuristicParseTravelIntent(
       'flights from tbilisi to dubai on 10 march for five nights',
       reference,
@@ -173,6 +179,7 @@ describe('heuristicParseTravelIntent', () => {
     expect(result.departureDate).toBe('2027-03-10');
     expect(result.returnDate).toBe('2027-03-15');
     expect(result.tripType).toBe('one_way');
+    expect(result.hotelNights).toBe(5);
     expect(result.clarifyingQuestion).toBeNull();
   });
 
@@ -188,11 +195,27 @@ describe('heuristicParseTravelIntent', () => {
     expect(result.returnDate).toBe('2026-08-26');
     expect(result.adults).toBe(2);
     expect(result.tripType).toBe('round_trip');
+    expect(result.hotelNights).toBeNull();
     expect(result.clarifyingQuestion).toMatch(/departing from/i);
+  });
+
+  it('asks for hotel nights on one-way with date but no stay length', () => {
+    const result = heuristicParseTravelIntent(
+      'Book me a flight from Batumi to Rome next Monday.',
+      reference,
+    );
+
+    expect(result.originIata).toBe('BUS');
+    expect(result.destinationIata).toBe('FCO');
+    expect(result.departureDate).toBe('2026-07-20');
+    expect(result.tripType).toBe('one_way');
+    expect(result.hotelNights).toBeNull();
+    expect(result.clarifyingQuestion).toMatch(/hotel nights/i);
   });
 
   it('clears invented same-city origin and asks for departure', () => {
     const result = finalizeTravelIntent({
+      isTravelRequest: true,
       originIata: 'DXB',
       destinationIata: 'DXB',
       originCity: 'Dubai',
@@ -200,6 +223,7 @@ describe('heuristicParseTravelIntent', () => {
       departureDate: '2026-08-20',
       returnDate: '2026-08-26',
       tripType: 'round_trip',
+      hotelNights: null,
       adults: 2,
       source: 'gemini',
       notes: [],
@@ -218,6 +242,7 @@ describe('heuristicParseTravelIntent', () => {
     );
     expect(partial.originIata).toBeNull();
     expect(partial.destinationIata).toBe('DXB');
+    expect(partial.hotelNights).toBe(5);
     expect(partial.clarifyingQuestion).toMatch(/departing from/i);
 
     const withOrigin = applyClarificationAnswer(
@@ -244,6 +269,215 @@ describe('heuristicParseTravelIntent', () => {
     expect(withDate.originIata).toBe('TBS');
     expect(withDate.departureDate).toBe('2026-08-20');
     expect(withDate.returnDate).toBe('2026-08-25');
+    expect(withDate.hotelNights).toBe(5);
     expect(withDate.clarifyingQuestion).toBeNull();
+  });
+
+  it('rejects non-travel prompts and asks for destination (not origin)', () => {
+    const result = heuristicParseTravelIntent(
+      'what color is my dog',
+      reference,
+    );
+
+    expect(result.isTravelRequest).toBe(false);
+    expect(result.originIata).toBeNull();
+    expect(result.destinationIata).toBeNull();
+    expect(result.departureDate).toBeNull();
+    expect(result.tripType).toBeNull();
+    expect(result.clarifyingQuestion).toMatch(/doesn.t look like a trip/i);
+    expect(result.clarifyingQuestion).toMatch(/want to go/i);
+    expect(result.clarificationFocus).toBe('destination');
+  });
+
+  it('does not accept a spoofed origin clarifyingQuestion when destination is missing', () => {
+    const result = finalizeTravelIntent({
+      isTravelRequest: false,
+      originIata: null,
+      destinationIata: null,
+      originCity: null,
+      destinationCity: null,
+      departureDate: null,
+      returnDate: null,
+      tripType: null,
+      hotelNights: null,
+      adults: null,
+      source: 'gemini',
+      notes: [],
+      clarifyingQuestion: 'Where are you departing from?',
+    });
+
+    expect(result.destinationIata).toBeNull();
+    expect(result.clarifyingQuestion).toMatch(/want to go/i);
+    expect(result.clarificationFocus).toBe('destination');
+  });
+
+  it('walks full Q&A from non-travel prompt to ready search fields', () => {
+    let draft = heuristicParseTravelIntent('what color is my dog', reference);
+    expect(draft.isTravelRequest).toBe(false);
+    expect(draft.clarificationFocus).toBe('destination');
+
+    draft = applyClarificationAnswer(draft, 'Berlin', 'destination', reference);
+    expect(draft.isTravelRequest).toBe(true);
+    expect(draft.destinationIata).toBe('BER');
+    expect(draft.clarificationFocus).toBe('origin');
+
+    draft = applyClarificationAnswer(draft, 'Tbilisi', 'origin', reference);
+    expect(draft.originIata).toBe('TBS');
+    expect(draft.clarificationFocus).toBe('tripType');
+
+    draft = applyClarificationAnswer(draft, 'one way', 'tripType', reference);
+    expect(draft.tripType).toBe('one_way');
+    expect(draft.clarificationFocus).toBe('departureDate');
+
+    draft = applyClarificationAnswer(
+      draft,
+      '20 august',
+      'departureDate',
+      reference,
+    );
+    expect(draft.departureDate).toBe('2026-08-20');
+    expect(draft.clarificationFocus).toBe('hotelNights');
+
+    draft = applyClarificationAnswer(draft, '3', 'hotelNights', reference);
+    expect(draft.hotelNights).toBe(3);
+    expect(draft.clarifyingQuestion).toBeNull();
+    expect(draft.clarificationFocus).toBeNull();
+  });
+
+  it('keeps confirmed origin when re-parsing enriched chat for trip type', () => {
+    const heuristic = heuristicParseTravelIntent(
+      'what color is my dog\nto Dubai\nfrom tbilisi\ntrip type one way',
+      reference,
+    );
+    const base = preferConfirmedDraft(heuristic, {
+      originIata: 'TBS',
+      originCity: 'Tbilisi',
+      destinationIata: 'DXB',
+      destinationCity: 'Dubai',
+    });
+    const next = applyClarificationAnswer(
+      base,
+      'one way',
+      'tripType',
+      reference,
+    );
+    expect(next.originIata).toBe('TBS');
+    expect(next.destinationIata).toBe('DXB');
+    expect(next.tripType).toBe('one_way');
+    expect(next.clarificationFocus).toBe('departureDate');
+  });
+
+  it('does not treat hotel-night counts as a 2-digit year on departing dates', () => {
+    const polluted = heuristicParseTravelIntent(
+      'to Berlin\nfrom tbilisi\ntrip type one way\ndeparting 20 august\n10 hotel nights',
+      reference,
+    );
+    const base = preferConfirmedDraft(polluted, {
+      originIata: 'TBS',
+      destinationIata: 'BER',
+      tripType: 'one_way',
+      departureDate: '2026-08-20',
+    });
+    const next = applyClarificationAnswer(
+      base,
+      '10',
+      'hotelNights',
+      reference,
+      'to Berlin\nfrom tbilisi\ntrip type one way\ndeparting 20 august\n10 hotel nights',
+    );
+    expect(next.departureDate).toBe('2026-08-20');
+    expect(next.hotelNights).toBe(10);
+    expect(next.clarifyingQuestion).toBeNull();
+  });
+
+  it('asks trip type when route is known but trip type is unclear', () => {
+    const result = heuristicParseTravelIntent(
+      'from tbilisi to berlin please',
+      reference,
+    );
+
+    expect(result.originIata).toBe('TBS');
+    expect(result.destinationIata).toBe('BER');
+    expect(result.tripType).toBeNull();
+    expect(result.clarifyingQuestion).toMatch(/one-way or round-trip/i);
+  });
+
+  it('applies trip type and hotel nights clarifications', () => {
+    const partial = finalizeTravelIntent({
+      isTravelRequest: true,
+      originIata: 'TBS',
+      destinationIata: 'CDG',
+      originCity: 'Tbilisi',
+      destinationCity: 'Paris',
+      departureDate: '2026-09-15',
+      returnDate: null,
+      tripType: null,
+      hotelNights: null,
+      adults: 1,
+      source: 'heuristic',
+      notes: [],
+    });
+    expect(partial.clarifyingQuestion).toMatch(/one-way or round-trip/i);
+
+    const withType = applyClarificationAnswer(
+      partial,
+      'one way',
+      'tripType',
+      reference,
+    );
+    expect(withType.tripType).toBe('one_way');
+    expect(withType.clarifyingQuestion).toMatch(/hotel nights/i);
+
+    const withNights = applyClarificationAnswer(
+      withType,
+      '3',
+      'hotelNights',
+      reference,
+    );
+    expect(withNights.hotelNights).toBe(3);
+    expect(withNights.returnDate).toBe('2026-09-18');
+    expect(withNights.clarifyingQuestion).toBeNull();
+  });
+
+  it('hotels-only: date-range prompt asks hotel city and keeps stay dates', () => {
+    const result = heuristicParseTravelIntent(
+      'i want hotel from 20 september to 25 september',
+      reference,
+      'HOTELS',
+    );
+
+    expect(result.isTravelRequest).toBe(true);
+    expect(result.originIata).toBeNull();
+    expect(result.destinationIata).toBeNull();
+    expect(result.departureDate).toBe('2026-09-20');
+    expect(result.returnDate).toBe('2026-09-25');
+    expect(result.clarificationFocus).toBe('destination');
+    expect(result.clarifyingQuestion).toBe(
+      'Which city do you want a hotel in?',
+    );
+    expect(result.clarifyingQuestion).not.toMatch(/departing from|where do you want to go/i);
+  });
+
+  it('hotels-only: city answer after date prompt is ready without origin', () => {
+    const base = heuristicParseTravelIntent(
+      'i want hotel from 20 september to 25 september',
+      reference,
+      'HOTELS',
+    );
+    const next = applyClarificationAnswer(
+      base,
+      'Berlin',
+      'destination',
+      reference,
+      'i want hotel from 20 september to 25 september',
+      'HOTELS',
+    );
+
+    expect(next.destinationIata).toBe('BER');
+    expect(next.departureDate).toBe('2026-09-20');
+    expect(next.returnDate).toBe('2026-09-25');
+    expect(next.originIata).toBeNull();
+    expect(next.clarifyingQuestion).toBeNull();
+    expect(next.clarificationFocus).toBeNull();
   });
 });

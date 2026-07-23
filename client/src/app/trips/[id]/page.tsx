@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { authApi, AuthUser, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
-import { tripsApi, Trip } from "@/lib/api/trips";
+import { tripsApi, Trip, BookingMode } from "@/lib/api/trips";
 import { approvalsApi, ApprovalHistory } from "@/lib/api/approvals";
 import { FlightOffer, HotelOffer } from "@/lib/api/travel";
 import { airportFromCityName, findAirportByIata } from "@/lib/airports";
@@ -30,8 +30,15 @@ function formatStatus(status: string) {
 }
 
 function SelectedItinerarySummary({ trip }: { trip: Trip }) {
-  const flight = trip.flightOffers?.find((o) => o.selected) ?? null;
-  const hotel = trip.hotelOffers?.find((o) => o.selected) ?? null;
+  const mode = trip.bookingMode ?? "BOTH";
+  const showFlight = mode !== "HOTELS";
+  const showHotel = mode !== "FLIGHTS";
+  const flight = showFlight
+    ? (trip.flightOffers?.find((o) => o.selected) ?? null)
+    : null;
+  const hotel = showHotel
+    ? (trip.hotelOffers?.find((o) => o.selected) ?? null)
+    : null;
   const flightPrice = flight?.priceAmount ?? null;
   const hotelPrice = hotel?.priceAmount ?? null;
   const currency =
@@ -51,7 +58,11 @@ function SelectedItinerarySummary({ trip }: { trip: Trip }) {
             your itinerary
           </h2>
           <p className="mt-1 text-sm lowercase text-ss-muted">
-            selected offers for this trip
+            {mode === "FLIGHTS"
+              ? "selected flight for this trip"
+              : mode === "HOTELS"
+                ? "selected hotel for this trip"
+                : "selected offers for this trip"}
           </p>
         </div>
         <div className="text-right">
@@ -62,69 +73,80 @@ function SelectedItinerarySummary({ trip }: { trip: Trip }) {
         </div>
       </div>
 
-      <div className="mt-5 grid gap-4 text-sm lowercase sm:grid-cols-2">
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-          <p className="text-xs uppercase tracking-wide text-ss-muted">flight</p>
-          {flight ? (
-            <div className="mt-2 space-y-1">
-              <p className="text-base text-ss-text">
-                {originCity ? `${originCity} (${flight.origin})` : flight.origin}{" "}
-                →{" "}
-                {destCity
-                  ? `${destCity} (${flight.destination})`
-                  : flight.destination}
-              </p>
-              <p className="text-ss-muted">
-                depart {formatFlightClock(flight.departAt)}
-                {flight.departAt
-                  ? ` · ${formatFlightDateTime(flight.departAt)}`
-                  : ""}
-              </p>
-              <p className="pt-1 font-medium text-ss-text">
-                {flightPrice != null
-                  ? `${flightPrice} ${flight.currency ?? currency}`
-                  : "price n/a"}
-              </p>
-            </div>
-          ) : (
-            <p className="mt-2 text-ss-muted">none selected yet</p>
-          )}
-        </div>
+      <div
+        className={`mt-5 grid gap-4 text-sm lowercase ${showFlight && showHotel ? "sm:grid-cols-2" : ""}`}
+      >
+        {showFlight ? (
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+            <p className="text-xs uppercase tracking-wide text-ss-muted">
+              flight
+            </p>
+            {flight ? (
+              <div className="mt-2 space-y-1">
+                <p className="text-base text-ss-text">
+                  {originCity
+                    ? `${originCity} (${flight.origin})`
+                    : flight.origin}{" "}
+                  →{" "}
+                  {destCity
+                    ? `${destCity} (${flight.destination})`
+                    : flight.destination}
+                </p>
+                <p className="text-ss-muted">
+                  depart {formatFlightClock(flight.departAt)}
+                  {flight.departAt
+                    ? ` · ${formatFlightDateTime(flight.departAt)}`
+                    : ""}
+                </p>
+                <p className="pt-1 font-medium text-ss-text">
+                  {flightPrice != null
+                    ? `${flightPrice} ${flight.currency ?? currency}`
+                    : "price n/a"}
+                </p>
+              </div>
+            ) : (
+              <p className="mt-2 text-ss-muted">none selected yet</p>
+            )}
+          </div>
+        ) : null}
 
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-          <p className="text-xs uppercase tracking-wide text-ss-muted">hotel</p>
-          {hotel ? (
-            <div className="mt-2 space-y-1">
-              <p className="text-base text-ss-text">{hotel.hotelName}</p>
-              <p className="text-ss-muted">
-                {hotel.city ?? "—"}
-                {hotel.checkIn && hotel.checkOut
-                  ? ` · ${hotel.checkIn} → ${hotel.checkOut}`
-                  : ""}
-                {(() => {
-                  const nights = nightsBetween(hotel.checkIn, hotel.checkOut);
-                  const label = formatNights(nights);
-                  return label ? ` · ${label}` : "";
-                })()}
-              </p>
-              <p className="pt-1 font-medium text-ss-text">
-                {formatHotelStayPrice({
-                  priceAmount: hotelPrice,
-                  currency: hotel.currency ?? currency,
-                  checkIn: hotel.checkIn,
-                  checkOut: hotel.checkOut,
-                })}
-              </p>
-            </div>
-          ) : (
-            <p className="mt-2 text-ss-muted">none selected yet</p>
-          )}
-        </div>
+        {showHotel ? (
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+            <p className="text-xs uppercase tracking-wide text-ss-muted">hotel</p>
+            {hotel ? (
+              <div className="mt-2 space-y-1">
+                <p className="text-base text-ss-text">{hotel.hotelName}</p>
+                <p className="text-ss-muted">
+                  {hotel.city ?? "—"}
+                  {hotel.checkIn && hotel.checkOut
+                    ? ` · ${hotel.checkIn} → ${hotel.checkOut}`
+                    : ""}
+                  {(() => {
+                    const nights = nightsBetween(hotel.checkIn, hotel.checkOut);
+                    const label = formatNights(nights);
+                    return label ? ` · ${label}` : "";
+                  })()}
+                </p>
+                <p className="pt-1 font-medium text-ss-text">
+                  {formatHotelStayPrice({
+                    priceAmount: hotelPrice,
+                    currency: hotel.currency ?? currency,
+                    checkIn: hotel.checkIn,
+                    checkOut: hotel.checkOut,
+                  })}
+                </p>
+              </div>
+            ) : (
+              <p className="mt-2 text-ss-muted">none selected yet</p>
+            )}
+          </div>
+        ) : null}
       </div>
 
       {flight && hotel && total != null ? (
         <p className="mt-4 text-xs lowercase text-ss-muted">
-          flight {flightPrice ?? 0} + hotel {hotelPrice ?? 0} = {total} {currency}
+          flight {flightPrice ?? 0} + hotel {hotelPrice ?? 0} = {total}{" "}
+          {currency}
         </p>
       ) : null}
     </section>
@@ -132,6 +154,11 @@ function SelectedItinerarySummary({ trip }: { trip: Trip }) {
 }
 
 const EDITABLE = new Set(["DRAFT", "REJECTED"]);
+const BOOKING_MODE_OPTIONS: Array<{ value: BookingMode; label: string }> = [
+  { value: "BOTH", label: "flights & hotels" },
+  { value: "FLIGHTS", label: "flights only" },
+  { value: "HOTELS", label: "hotels only" },
+];
 
 export default function TripDetailPage() {
   const router = useRouter();
@@ -150,7 +177,7 @@ export default function TripDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   function applyTrip(next: Trip) {
-    setTrip(next);
+    setTrip({ ...next, bookingMode: next.bookingMode ?? "BOTH" });
     setPurpose(
       !next.purpose || next.purpose === "New trip" ? "" : next.purpose,
     );
@@ -270,13 +297,42 @@ export default function TripDetailPage() {
     if (!purpose.trim()) {
       throw new ApiError("purpose of trip is required", 400);
     }
+    const mode = current.bookingMode ?? "BOTH";
     const hasFlight = current.flightOffers.some((o) => o.selected);
     const hasHotel = current.hotelOffers.some((o) => o.selected);
-    if (!hasFlight) {
+    if (mode !== "HOTELS" && !hasFlight) {
       throw new ApiError("select a flight before submitting for approval", 400);
     }
-    if (!hasHotel) {
+    if (mode !== "FLIGHTS" && !hasHotel) {
       throw new ApiError("select a hotel before submitting for approval", 400);
+    }
+  }
+
+  async function changeBookingMode(nextMode: BookingMode) {
+    const token = getStoredAccessToken();
+    if (!token || !trip || trip.bookingMode === nextMode || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await tripsApi.update(
+        trip.id,
+        { bookingMode: nextMode },
+        token,
+      );
+      applyTrip(next);
+      setMessage(
+        nextMode === "FLIGHTS"
+          ? "booking mode set to flights only."
+          : nextMode === "HOTELS"
+            ? "booking mode set to hotels only."
+            : "booking mode set to flights & hotels.",
+      );
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Unable to update booking mode",
+      );
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -350,8 +406,13 @@ export default function TripDetailPage() {
     trip.status === "COMPLETED";
   const hasSelectedFlight = trip.flightOffers.some((o) => o.selected);
   const hasSelectedHotel = trip.hotelOffers.some((o) => o.selected);
+  const bookingMode = trip.bookingMode ?? "BOTH";
+  const needsFlight = bookingMode !== "HOTELS";
+  const needsHotel = bookingMode !== "FLIGHTS";
   const canSubmit =
-    Boolean(purpose.trim()) && hasSelectedFlight && hasSelectedHotel;
+    Boolean(purpose.trim()) &&
+    (!needsFlight || hasSelectedFlight) &&
+    (!needsHotel || hasSelectedHotel);
 
   return (
     <AppShell user={user}>
@@ -431,9 +492,12 @@ export default function TripDetailPage() {
                 <p className="text-xs text-ss-muted lowercase">
                   {!purpose.trim()
                     ? "add a purpose of trip before submitting."
-                    : !hasSelectedFlight && !hasSelectedHotel
+                    : needsFlight &&
+                        needsHotel &&
+                        !hasSelectedFlight &&
+                        !hasSelectedHotel
                       ? "select a flight and a hotel before submitting."
-                      : !hasSelectedFlight
+                      : needsFlight && !hasSelectedFlight
                         ? "select a flight before submitting."
                         : "select a hotel before submitting."}
                 </p>
@@ -597,9 +661,30 @@ export default function TripDetailPage() {
 
         {canEdit && token ? (
           <div className="mt-10 border-t border-white/10 pt-8">
+            <div className="mb-6 space-y-2">
+              <Label className="lowercase text-ss-muted">what do you need?</Label>
+              <div className="flex flex-wrap gap-2">
+                {BOOKING_MODE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void changeBookingMode(opt.value)}
+                    className={`h-10 rounded-full px-4 text-sm lowercase transition-colors ${
+                      bookingMode === opt.value
+                        ? "bg-ss-accent text-white"
+                        : "border border-white/20 text-ss-muted hover:bg-white/5"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <TripSearchWidget
               tripId={trip.id}
               accessToken={token}
+              bookingMode={bookingMode}
               defaultOrigin=""
               defaultDestination={
                 airportFromCityName(trip.destinationCity)?.iata ?? ""

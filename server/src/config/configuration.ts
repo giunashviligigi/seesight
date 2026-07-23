@@ -54,6 +54,10 @@ export default () => ({
     geminiBaseUrl:
       process.env.GEMINI_BASE_URL ??
       'https://generativelanguage.googleapis.com/v1beta',
+    groqApiKey: process.env.GROQ_API_KEY ?? '',
+    groqModel: process.env.GROQ_MODEL ?? 'llama-3.3-70b-versatile',
+    groqBaseUrl:
+      process.env.GROQ_BASE_URL ?? 'https://api.groq.com/openai/v1',
     maxOutputTokens: parseInt(process.env.AI_MAX_OUTPUT_TOKENS ?? '1024', 10),
     maxOffersPerType: parseInt(process.env.AI_MAX_OFFERS_PER_TYPE ?? '8', 10),
     rateLimitPerMinute: parseInt(
