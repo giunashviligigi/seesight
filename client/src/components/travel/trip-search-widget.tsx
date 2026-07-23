@@ -40,6 +40,7 @@ type TripSearchWidgetProps = {
     destinationCountry: string | null;
     depart: string;
     returnDate: string;
+    hotelCheckOut: string;
     tripType: "one_way" | "round_trip";
   }) => Promise<void> | void;
   disabled?: boolean;
@@ -87,6 +88,20 @@ function sanitizeTravelDate(value: string, today: string): string {
   return isPastUtcDate(value, today) ? "" : value;
 }
 
+function addUtcDays(isoDate: string, days: number): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d + days));
+  const yy = date.getUTCFullYear();
+  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(date.getUTCDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+function clampHotelNights(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(30, Math.max(1, Math.round(value)));
+}
+
 export function TripSearchWidget({
   tripId,
   accessToken,
@@ -120,6 +135,16 @@ export function TripSearchWidget({
   const [tripType, setTripType] = useState<"one_way" | "round_trip">(
     defaultReturn ? "round_trip" : "one_way",
   );
+  const [hotelNights, setHotelNights] = useState(() => {
+    const safeToday = utcTodayIso();
+    const safeDepart = sanitizeTravelDate(defaultDepart, safeToday);
+    const safeEnd = sanitizeTravelDate(defaultReturn, safeToday);
+    if (safeDepart && safeEnd && safeEnd > safeDepart) {
+      const derived = nightsBetween(safeDepart, safeEnd);
+      if (derived != null) return String(clampHotelNights(derived));
+    }
+    return "1";
+  });
   const [adults, setAdults] = useState("1");
   const [nlPrompt, setNlPrompt] = useState("");
   const [nlConversation, setNlConversation] = useState<string | null>(null);
@@ -207,6 +232,7 @@ export function TripSearchWidget({
     city: string;
     adults: number;
     tripType: "one_way" | "round_trip";
+    hotelNights: number;
   }) {
     const hotelCity =
       params.city.trim() ||
@@ -216,8 +242,11 @@ export function TripSearchWidget({
       params.tripType === "round_trip" && params.ret
         ? params.ret
         : undefined;
-    // One-way flights may still include a stay end date for hotel checkout.
-    const hotelCheckOut = params.ret || returnDate || params.depart;
+    const nights = clampHotelNights(params.hotelNights);
+    const hotelCheckOut =
+      params.tripType === "round_trip" && returnDate
+        ? returnDate
+        : addUtcDays(params.depart, nights);
     const [flightResult, hotelResult] = await Promise.all([
       travelApi.searchFlights(
         {
@@ -259,11 +288,12 @@ export function TripSearchWidget({
         destinationCountry: destAirport?.country ?? null,
         depart: params.depart,
         returnDate: returnDate ?? "",
+        hotelCheckOut,
         tripType: params.tripType,
       });
     }
 
-    return { nextFlights, nextHotels, flightResult, hotelResult };
+    return { nextFlights, nextHotels, flightResult, hotelResult, hotelCheckOut };
   }
 
   async function onSearch(event: FormEvent<HTMLFormElement>) {
@@ -283,6 +313,7 @@ export function TripSearchWidget({
     setMessage(null);
     try {
       const adultsCount = Math.max(1, Number(adults) || 1);
+      const nightsCount = clampHotelNights(Number(hotelNights) || 1);
       const { nextFlights, nextHotels, flightResult, hotelResult } =
         await runMarketSearch({
           origin,
@@ -292,9 +323,11 @@ export function TripSearchWidget({
           city,
           adults: adultsCount,
           tripType,
+          hotelNights: nightsCount,
         });
       setMessage(
         `found ${nextFlights.length} flights (${tripType === "round_trip" ? "round trip" : "one way"}) and ${nextHotels.length} hotels · showing top ${PAGE_SIZE}` +
+          (tripType === "one_way" ? ` · ${formatNights(nightsCount)} hotel` : "") +
           (flightResult.cached || hotelResult.cached ? " (cached)" : ""),
       );
     } catch (err) {
@@ -571,14 +604,21 @@ export function TripSearchWidget({
       parsed.tripType ?? (nextReturn ? "round_trip" : "one_way");
     const nextCity = parsed.destinationCity ?? city;
     const nextAdults = String(parsed.adults ?? Math.max(1, Number(adults) || 1));
+    let nextNights = clampHotelNights(Number(hotelNights) || 1);
+    if (nextTripType === "one_way" && nextDepart && nextReturn) {
+      // NL gave a stay end without round-trip flight — treat as hotel nights.
+      const derived = nightsBetween(nextDepart, nextReturn);
+      if (derived != null) nextNights = clampHotelNights(derived);
+    }
 
     setOrigin(nextOrigin);
     setDestination(nextDestination);
     setDepart(nextDepart);
-    setRet(nextReturn);
+    setRet(nextTripType === "round_trip" ? nextReturn : "");
     setTripType(nextTripType);
     setCity(nextCity);
     setAdults(nextAdults);
+    setHotelNights(String(nextNights));
 
     if (isPastUtcDate(parsed.departureDate, today)) {
       setNlConversation(null);
@@ -592,7 +632,8 @@ export function TripSearchWidget({
       return;
     }
 
-    const dateError = assertTravelDates(nextDepart, nextReturn, nextTripType);
+    const flightReturn = nextTripType === "round_trip" ? nextReturn : "";
+    const dateError = assertTravelDates(nextDepart, flightReturn, nextTripType);
     if (dateError) {
       setNlConversation(null);
       setClarifyingQuestion(null);
@@ -611,15 +652,16 @@ export function TripSearchWidget({
       origin: nextOrigin,
       destination: nextDestination,
       depart: nextDepart,
-      ret: nextReturn,
+      ret: flightReturn,
       city: nextCity,
       adults: Number(nextAdults) || 1,
       tripType: nextTripType,
+      hotelNights: nextNights,
     });
 
     const mappingNote = parsed.notes.find((n) => /→/.test(n));
     setMessage(
-      `understood: ${parsed.originCity ?? nextOrigin} (${nextOrigin}) → ${parsed.destinationCity ?? nextDestination} (${nextDestination}) · ${nextDepart}${nextReturn ? ` to ${nextReturn}` : ""} · ${nextTripType === "round_trip" ? "round trip" : "one way"} · found ${nextFlights.length} flights and ${nextHotels.length} hotels${mappingNote ? ` · ${mappingNote}` : ""}`,
+      `understood: ${parsed.originCity ?? nextOrigin} (${nextOrigin}) → ${parsed.destinationCity ?? nextDestination} (${nextDestination}) · ${nextDepart}${flightReturn ? ` to ${flightReturn}` : nextTripType === "one_way" ? ` · ${formatNights(nextNights)} hotel` : ""} · ${nextTripType === "round_trip" ? "round trip" : "one way"} · found ${nextFlights.length} flights and ${nextHotels.length} hotels${mappingNote ? ` · ${mappingNote}` : ""}`,
     );
   }
 
@@ -904,6 +946,29 @@ export function TripSearchWidget({
               disabled={disabled}
               className="mt-1 h-10 rounded-xl border-0 bg-transparent text-ss-text"
             />
+            {tripType === "one_way" ? (
+              <>
+                <Label className="mt-2 block lowercase text-ss-muted">
+                  hotel nights
+                </Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={hotelNights}
+                  onChange={(e) => setHotelNights(e.target.value)}
+                  disabled={disabled}
+                  aria-label="hotel nights"
+                  className="mt-1 h-10 rounded-xl border-0 bg-transparent text-ss-text"
+                />
+                {depart ? (
+                  <p className="mt-1 text-[11px] text-ss-muted lowercase">
+                    stay {depart} →{" "}
+                    {addUtcDays(depart, clampHotelNights(Number(hotelNights) || 1))}
+                  </p>
+                ) : null}
+              </>
+            ) : null}
           </div>
         </div>
 

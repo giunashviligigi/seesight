@@ -183,7 +183,11 @@ export class TripsController {
 
   @Post(':id/start')
   @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN)
-  @ApiOperation({ summary: 'Mark approved trip as in progress' })
+  @ApiOperation({
+    summary:
+      'Deprecated: manually mark approved trip as in progress (auto-promoted when startDate is due)',
+    deprecated: true,
+  })
   @ApiOkResponse({ type: TripResponseDto })
   start(
     @CurrentUser() user: RequestUser,

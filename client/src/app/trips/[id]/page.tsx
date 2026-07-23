@@ -285,6 +285,7 @@ export default function TripDetailPage() {
     destinationCountry: string | null;
     depart: string;
     returnDate: string;
+    hotelCheckOut: string;
   }) {
     const token = getStoredAccessToken();
     if (!token || !trip) return;
@@ -297,7 +298,8 @@ export default function TripDetailPage() {
         countryCode = trip.destinationCountry;
       }
     }
-    const endDate = criteria.returnDate || criteria.depart;
+    const endDate =
+      criteria.hotelCheckOut || criteria.returnDate || criteria.depart;
     try {
       const next = await tripsApi.update(
         trip.id,
@@ -492,20 +494,6 @@ export default function TripDetailPage() {
                 </Link>
               </div>
             </div>
-          ) : null}
-          {trip.status === "APPROVED" && isAdmin && token ? (
-            <Button
-              disabled={busy}
-              onClick={() =>
-                void runAction(
-                  () => tripsApi.start(trip.id, token),
-                  "trip marked in progress.",
-                )
-              }
-              className="rounded-full bg-ss-accent px-4 text-white lowercase hover:bg-ss-accent-hover"
-            >
-              start
-            </Button>
           ) : null}
           {canExportInvoice && token ? (
             <Button

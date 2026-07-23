@@ -154,6 +154,7 @@ export class TripsService {
     actor: RequestUser,
     query: ListTripsQueryDto,
   ): Promise<TripListResponseDto> {
+    await this.promoteDueTrips();
     const companyId = resolveTenantCompanyId(actor, query.companyId);
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
@@ -208,8 +209,41 @@ export class TripsService {
   }
 
   async getById(actor: RequestUser, id: string): Promise<TripResponseDto> {
+    await this.promoteDueTrips();
     const trip = await this.findAccessibleTrip(actor, id);
     return this.toResponse(trip);
+  }
+
+  /**
+   * Auto-move APPROVED trips to IN_PROGRESS once startDate (UTC day) is due.
+   * Called hourly by cron and on trip list/detail reads.
+   */
+  async promoteDueTrips(): Promise<number> {
+    const today = startOfUtcDay(new Date());
+    const due = await this.prisma.trip.findMany({
+      where: {
+        deletedAt: null,
+        status: TripStatus.APPROVED,
+        startDate: { lte: today },
+      },
+      select: { id: true, companyId: true },
+    });
+
+    if (due.length === 0) {
+      return 0;
+    }
+
+    await this.prisma.trip.updateMany({
+      where: { id: { in: due.map((trip) => trip.id) } },
+      data: { status: TripStatus.IN_PROGRESS },
+    });
+
+    const companyIds = [...new Set(due.map((trip) => trip.companyId))];
+    await Promise.all(
+      companyIds.map((companyId) => this.invalidateReports(companyId)),
+    );
+
+    return due.length;
   }
 
   /**
@@ -800,6 +834,11 @@ export class TripsService {
     }
 
     await this.invalidateReports(updated.companyId);
+    if (nextStatus === TripStatus.APPROVED) {
+      await this.promoteDueTrips();
+      const refreshed = await this.findAccessibleTrip(actor, id);
+      return this.toResponse(refreshed);
+    }
     return this.toResponse(updated);
   }
 

@@ -17,6 +17,7 @@ Flight and hotel search via **SerpAPI** (`google_flights` / `google_hotels`).
 | Editable statuses | Attach / field edits allowed in `DRAFT` and `REJECTED` only (locked while `PENDING_APPROVAL` — M10) |
 | Provider enum | `OfferProvider.SERPAPI` (enum also retains unused legacy `AMADEUS`) |
 | Date bounds | `departureDate` / `checkIn` must be **today or later** (UTC). `returnDate` ≥ `departureDate`; `checkOut` ≥ `checkIn`. |
+| One-way hotel | Traveler sets **hotel nights** (1–30). Checkout = depart + nights. Round-trip hotel stay follows return date. |
 
 ## Environment
 
@@ -47,6 +48,8 @@ SERPAPI_RATE_LIMIT_PER_MINUTE=30
 ## Frontend
 
 - `TripSearchWidget` on `/trips/[id]` (empty + filled tile states)
+- One-way: **hotel nights** control (1–30); checkout = depart + nights; trip `endDate` syncs to checkout
+- Round-trip: hotel stay follows return date
 - Selected offers shown on trip detail and survive reload via snapshots
 
 ## Tests

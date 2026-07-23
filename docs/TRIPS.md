@@ -8,7 +8,7 @@ Full trip lifecycle for individuals and groups. Approval **enforcement UI** is e
 DRAFT
   ├─ submit ───────────────▶ PENDING_APPROVAL
   │                            ├─ approve ──▶ APPROVED
-  │                            │                 ├─ start ──▶ IN_PROGRESS
+  │                            │                 ├─ (auto when startDate ≤ today) ──▶ IN_PROGRESS
   │                            │                 │              └─ complete ──▶ COMPLETED
   │                            │                 └─ cancel ──▶ CANCELLED
   │                            ├─ reject ───▶ REJECTED
@@ -22,7 +22,7 @@ DRAFT
 |------|----------------|
 | `DRAFT` | `PENDING_APPROVAL`, `CANCELLED` |
 | `PENDING_APPROVAL` | `APPROVED`, `REJECTED`, `CANCELLED` |
-| `APPROVED` | `IN_PROGRESS`, `CANCELLED` |
+| `APPROVED` | `IN_PROGRESS` (automatic when `startDate` is due; hourly cron + on trip list/detail), `CANCELLED` |
 | `IN_PROGRESS` | `COMPLETED`, `CANCELLED` |
 | `REJECTED` | `DRAFT`, `CANCELLED` |
 | `COMPLETED` | — (terminal) |
@@ -44,6 +44,7 @@ Invalid transitions return **400** with message `Invalid status transition from 
 | Tenant | Company admin own company; super admin passes `companyId`. |
 | Department filter | Trips that include a traveler in the given department. |
 | Travel dates | `startDate` must be **today or later** (UTC). `endDate` must be on or after `startDate`. Enforced on create and when updating `startDate`; search UI blocks past depart/return. |
+| In progress | Auto `APPROVED → IN_PROGRESS` when `startDate` ≤ today (UTC). Hourly background job + trip list/detail. No Start button in UI. |
 
 ## Endpoints
 
@@ -58,7 +59,7 @@ Invalid transitions return **400** with message `Invalid status transition from 
 | DELETE | `/trips/:id` | same — soft-delete (see Decisions) |
 | POST | `/trips/:id/approve` | SUPER_ADMIN, COMPANY_ADMIN |
 | POST | `/trips/:id/reject` | SUPER_ADMIN, COMPANY_ADMIN |
-| POST | `/trips/:id/start` | SUPER_ADMIN, COMPANY_ADMIN |
+| POST | `/trips/:id/start` | SUPER_ADMIN, COMPANY_ADMIN — **deprecated** (auto-promote preferred) |
 | POST | `/trips/:id/complete` | SUPER_ADMIN, COMPANY_ADMIN |
 | POST | `/trips/:id/reopen` | SUPER_ADMIN, COMPANY_ADMIN, EMPLOYEE |
 | GET | `/trips/:id/invoice` | SUPER_ADMIN, COMPANY_ADMIN, EMPLOYEE — **PDF** invoice after `APPROVED` / `IN_PROGRESS` / `COMPLETED`. Issuer: SeeSight (IBAN `GE24TB7431145061100139`). Bill-to: company `legalName` or `name`. |

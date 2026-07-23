@@ -17,6 +17,7 @@ describe('TripsService', () => {
       findUniqueOrThrow: jest.Mock;
       count: jest.Mock;
       update: jest.Mock;
+      updateMany: jest.Mock;
     };
     tripTraveler: {
       deleteMany: jest.Mock;
@@ -36,6 +37,9 @@ describe('TripsService', () => {
     };
     approvalAction: {
       create: jest.Mock;
+    };
+    reportCache: {
+      deleteMany: jest.Mock;
     };
     $transaction: jest.Mock;
   };
@@ -126,10 +130,11 @@ describe('TripsService', () => {
       trip: {
         create: jest.fn(),
         findFirst: jest.fn(),
-        findMany: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
         findUniqueOrThrow: jest.fn(),
         count: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       tripTraveler: {
         deleteMany: jest.fn(),
@@ -149,6 +154,9 @@ describe('TripsService', () => {
       },
       approvalAction: {
         create: jest.fn(),
+      },
+      reportCache: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       $transaction: jest.fn(async (arg: unknown) => {
         if (typeof arg === 'function') {
