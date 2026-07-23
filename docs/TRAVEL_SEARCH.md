@@ -16,6 +16,7 @@ Flight and hotel search via **SerpAPI** (`google_flights` / `google_hotels`).
 | Attach | One selected flight + one selected hotel per trip (`selected=true`) |
 | Editable statuses | Attach / field edits allowed in `DRAFT` and `REJECTED` only (locked while `PENDING_APPROVAL` — M10) |
 | Provider enum | `OfferProvider.SERPAPI` (enum also retains unused legacy `AMADEUS`) |
+| Date bounds | `departureDate` / `checkIn` must be **today or later** (UTC). `returnDate` ≥ `departureDate`; `checkOut` ≥ `checkIn`. |
 
 ## Environment
 
@@ -37,11 +38,11 @@ SERPAPI_RATE_LIMIT_PER_MINUTE=30
 
 ### Flight query params
 
-`origin`, `destination`, `departureDate`, optional `returnDate`, `adults`, `travelClass`, `currency`
+`origin`, `destination`, `departureDate` (≥ today), optional `returnDate` (≥ departure), `adults`, `travelClass`, `currency`
 
 ### Hotel query params
 
-`city`, `checkIn`, `checkOut`, optional `adults`, `currency`
+`city`, `checkIn` (≥ today), `checkOut` (≥ check-in), optional `adults`, `currency`
 
 ## Frontend
 

@@ -43,6 +43,7 @@ Invalid transitions return **400** with message `Invalid status transition from 
 | Employee scope | List/detail limited to trips they created or travel on; must include self when creating. |
 | Tenant | Company admin own company; super admin passes `companyId`. |
 | Department filter | Trips that include a traveler in the given department. |
+| Travel dates | `startDate` must be **today or later** (UTC). `endDate` must be on or after `startDate`. Enforced on create and when updating `startDate`; search UI blocks past depart/return. |
 
 ## Endpoints
 
