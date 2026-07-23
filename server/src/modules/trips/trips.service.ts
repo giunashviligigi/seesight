@@ -110,6 +110,7 @@ export class TripsService {
     const startDate = dto.startDate ?? today;
     const endDate = dto.endDate ?? startDate;
     this.assertDateRange(startDate, endDate);
+    this.assertNotInPast(startDate);
 
     const travelerInputs = this.normalizeTravelers(dto.travelers);
     await this.assertTravelersInCompany(companyId, travelerInputs);
@@ -344,6 +345,9 @@ export class TripsService {
       ? startOfUtcDay(new Date(dto.endDate))
       : trip.endDate;
     this.assertDateRange(toDateString(startDate), toDateString(endDate));
+    if (dto.startDate !== undefined) {
+      this.assertNotInPast(toDateString(startDate));
+    }
 
     let travelerInputs: TripTravelerInputDto[] | undefined;
     if (dto.travelers) {
@@ -1053,6 +1057,14 @@ export class TripsService {
     const end = startOfUtcDay(new Date(endDate));
     if (end.getTime() < start.getTime()) {
       throw new BadRequestException('endDate must be on or after startDate');
+    }
+  }
+
+  private assertNotInPast(startDate: string): void {
+    const start = startOfUtcDay(new Date(startDate));
+    const today = startOfUtcDay(new Date());
+    if (start.getTime() < today.getTime()) {
+      throw new BadRequestException('startDate must be on or after today');
     }
   }
 

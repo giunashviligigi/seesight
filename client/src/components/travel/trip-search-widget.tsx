@@ -70,6 +70,23 @@ function hotelCardPhoto(offer: HotelOffer): string | null {
   return offer.thumbnail ?? offer.images?.[0] ?? null;
 }
 
+function utcTodayIso(): string {
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const m = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(now.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function isPastUtcDate(value: string, today: string): boolean {
+  return Boolean(value) && value < today;
+}
+
+function sanitizeTravelDate(value: string, today: string): string {
+  if (!value) return "";
+  return isPastUtcDate(value, today) ? "" : value;
+}
+
 export function TripSearchWidget({
   tripId,
   accessToken,
@@ -84,13 +101,22 @@ export function TripSearchWidget({
   onCriteriaChange,
   disabled = false,
 }: TripSearchWidgetProps) {
+  const today = useMemo(() => utcTodayIso(), []);
   const [origin, setOrigin] = useState(defaultOrigin.toUpperCase());
   const [destination, setDestination] = useState(
     defaultDestination.toUpperCase(),
   );
   const [city, setCity] = useState(defaultCity);
-  const [depart, setDepart] = useState(defaultDepart);
-  const [ret, setRet] = useState(defaultReturn);
+  const [depart, setDepart] = useState(() =>
+    sanitizeTravelDate(defaultDepart, utcTodayIso()),
+  );
+  const [ret, setRet] = useState(() => {
+    const safeToday = utcTodayIso();
+    const safeDepart = sanitizeTravelDate(defaultDepart, safeToday);
+    const safeReturn = sanitizeTravelDate(defaultReturn, safeToday);
+    if (safeReturn && safeDepart && safeReturn < safeDepart) return "";
+    return safeReturn;
+  });
   const [tripType, setTripType] = useState<"one_way" | "round_trip">(
     defaultReturn ? "round_trip" : "one_way",
   );
@@ -139,6 +165,39 @@ export function TripSearchWidget({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [hotelDetail]);
+
+  useEffect(() => {
+    if (isPastUtcDate(depart, today)) {
+      setDepart("");
+    }
+    if (isPastUtcDate(ret, today) || (ret && depart && ret < depart)) {
+      setRet("");
+    }
+  }, [today, depart, ret]);
+
+  function assertTravelDates(
+    nextDepart: string,
+    nextReturn: string,
+    nextTripType: "one_way" | "round_trip",
+  ): string | null {
+    if (!nextDepart) {
+      return "pick a depart date on or after today";
+    }
+    if (isPastUtcDate(nextDepart, today)) {
+      return "depart date must be on or after today";
+    }
+    if (nextTripType === "round_trip") {
+      if (!nextReturn) {
+        return "pick a return date for round trip, or switch to one way";
+      }
+      if (isPastUtcDate(nextReturn, today) || nextReturn < nextDepart) {
+        return "return date must be on or after the depart date";
+      }
+    } else if (nextReturn && nextReturn < nextDepart) {
+      return "hotel checkout must be on or after the depart date";
+    }
+    return null;
+  }
 
   async function runMarketSearch(params: {
     origin: string;
@@ -214,8 +273,9 @@ export function TripSearchWidget({
       setError("pick a city/airport from the list for from and to");
       return;
     }
-    if (tripType === "round_trip" && !ret) {
-      setError("pick a return date for round trip, or switch to one way");
+    const dateError = assertTravelDates(depart, ret, tripType);
+    if (dateError) {
+      setError(dateError);
       return;
     }
     setSearching(true);
@@ -495,15 +555,18 @@ export function TripSearchWidget({
       return;
     }
 
-    setNlConversation(null);
-    setClarifyingQuestion(null);
-    setClarifyAnswer("");
-    setIntentDraft(null);
-
     const nextOrigin = parsed.originIata;
     const nextDestination = parsed.destinationIata;
-    const nextDepart = parsed.departureDate;
-    const nextReturn = parsed.returnDate ?? "";
+    const nextDepart = isPastUtcDate(parsed.departureDate, today)
+      ? ""
+      : parsed.departureDate;
+    const rawReturn = parsed.returnDate ?? "";
+    const nextReturn =
+      rawReturn &&
+      !isPastUtcDate(rawReturn, today) &&
+      (!nextDepart || rawReturn >= nextDepart)
+        ? rawReturn
+        : "";
     const nextTripType: "one_way" | "round_trip" =
       parsed.tripType ?? (nextReturn ? "round_trip" : "one_way");
     const nextCity = parsed.destinationCity ?? city;
@@ -516,6 +579,33 @@ export function TripSearchWidget({
     setTripType(nextTripType);
     setCity(nextCity);
     setAdults(nextAdults);
+
+    if (isPastUtcDate(parsed.departureDate, today)) {
+      setNlConversation(null);
+      setClarifyingQuestion(null);
+      setClarifyAnswer("");
+      setIntentDraft(null);
+      setError("depart date must be on or after today — pick a future date");
+      setMessage(
+        `understood route ${parsed.originCity ?? nextOrigin} → ${parsed.destinationCity ?? nextDestination}, but ${parsed.departureDate} is in the past`,
+      );
+      return;
+    }
+
+    const dateError = assertTravelDates(nextDepart, nextReturn, nextTripType);
+    if (dateError) {
+      setNlConversation(null);
+      setClarifyingQuestion(null);
+      setClarifyAnswer("");
+      setIntentDraft(null);
+      setError(dateError);
+      return;
+    }
+
+    setNlConversation(null);
+    setClarifyingQuestion(null);
+    setClarifyAnswer("");
+    setIntentDraft(null);
 
     const { nextFlights, nextHotels } = await runMarketSearch({
       origin: nextOrigin,
@@ -778,6 +868,7 @@ export function TripSearchWidget({
                 value={depart}
                 onChange={setDepart}
                 disabled={disabled}
+                min={today}
                 aria-label="depart date"
                 triggerClassName="h-10 border-white/20 bg-black/20 text-ss-text hover:border-white/35"
               />
@@ -788,7 +879,7 @@ export function TripSearchWidget({
                   onChange={setRet}
                   disabled={disabled}
                   aria-label="return date"
-                  min={depart || undefined}
+                  min={depart && depart > today ? depart : today}
                   triggerClassName="h-10 border-white/20 bg-black/20 text-ss-text hover:border-white/35"
                 />
               ) : null}

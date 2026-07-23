@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -94,6 +95,14 @@ export class TravelSearchService {
     query: SearchFlightsQueryDto,
   ): Promise<FlightSearchResponseDto> {
     this.assertRateLimit(actor.id);
+    this.assertNotInPast(query.departureDate, 'departureDate');
+    if (query.returnDate) {
+      this.assertDateOnOrAfter(
+        query.returnDate,
+        query.departureDate,
+        'returnDate must be on or after departureDate',
+      );
+    }
 
     const origin = query.origin.toUpperCase();
     const destination = query.destination.toUpperCase();
@@ -199,6 +208,12 @@ export class TravelSearchService {
     query: SearchHotelsQueryDto,
   ): Promise<HotelSearchResponseDto> {
     this.assertRateLimit(actor.id);
+    this.assertNotInPast(query.checkIn, 'checkIn');
+    this.assertDateOnOrAfter(
+      query.checkOut,
+      query.checkIn,
+      'checkOut must be on or after checkIn',
+    );
 
     const city = query.city.trim();
     const adults = query.adults ?? 1;
@@ -254,6 +269,30 @@ export class TravelSearchService {
         'Travel search rate limit exceeded. Try again shortly.',
         HttpStatus.TOO_MANY_REQUESTS,
       );
+    }
+  }
+
+  private assertNotInPast(dateIso: string, field: string): void {
+    const value = startOfUtcDay(new Date(dateIso));
+    const today = startOfUtcDay(new Date());
+    if (Number.isNaN(value.getTime()) || value.getTime() < today.getTime()) {
+      throw new BadRequestException(`${field} must be on or after today`);
+    }
+  }
+
+  private assertDateOnOrAfter(
+    laterIso: string,
+    earlierIso: string,
+    message: string,
+  ): void {
+    const later = startOfUtcDay(new Date(laterIso));
+    const earlier = startOfUtcDay(new Date(earlierIso));
+    if (
+      Number.isNaN(later.getTime()) ||
+      Number.isNaN(earlier.getTime()) ||
+      later.getTime() < earlier.getTime()
+    ) {
+      throw new BadRequestException(message);
     }
   }
 
@@ -530,4 +569,10 @@ function nightsBetween(checkIn: string, checkOut: string): number {
     return 1;
   }
   return Math.max(1, Math.round((end - start) / 86_400_000));
+}
+
+function startOfUtcDay(date: Date): Date {
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
 }
