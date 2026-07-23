@@ -10,7 +10,8 @@ Manager review before travel proceeds. Builds on the M7 trip status machine.
 | Decide | Company admins (and super admins) approve/reject with optional comment |
 | Self-approve | Allowed for company admins / super admins (they own the approval queue) |
 | Edit / attach offers | Only `DRAFT` and `REJECTED` (locked while pending or after approval) |
-| Start travel | Still requires `APPROVED → IN_PROGRESS` (cannot skip approval) |
+| Start travel | **Automatic:** `APPROVED → IN_PROGRESS` when UTC `startDate` ≤ today (hourly job + on trip list/detail). No Start button in UI. Manual `POST /trips/:id/start` remains deprecated. |
+| Complete | Admin marks `IN_PROGRESS → COMPLETED` when travel finishes |
 | Rejected trips | Editable + `reopen` to `DRAFT`, then resubmit |
 | Notifications | In-app only (no SMTP yet — same as forgot-password) |
 
