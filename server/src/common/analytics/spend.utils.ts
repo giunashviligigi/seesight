@@ -1,4 +1,11 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, TripStatus } from '@prisma/client';
+
+/** Trips that count toward committed travel spend (dashboard + reports). */
+export const COMMITTED_TRIP_STATUSES: TripStatus[] = [
+  TripStatus.APPROVED,
+  TripStatus.IN_PROGRESS,
+  TripStatus.COMPLETED,
+];
 
 export function startOfUtcDay(date: Date): Date {
   return new Date(
@@ -83,4 +90,16 @@ export function escapeCsvCell(value: string | number | null | undefined): string
 export function toCsv(rows: Array<Array<string | number | null | undefined>>): string {
   const lines = rows.map((row) => row.map(escapeCsvCell).join(','));
   return `\uFEFF${lines.join('\r\n')}\r\n`;
+}
+
+/** Drop cached report summaries so deletes/status changes show up immediately. */
+export async function invalidateReportCacheForCompany(
+  prisma: {
+    reportCache: {
+      deleteMany: (args: { where: { companyId: string } }) => Promise<unknown>;
+    };
+  },
+  companyId: string,
+): Promise<void> {
+  await prisma.reportCache.deleteMany({ where: { companyId } });
 }

@@ -68,12 +68,24 @@ function BarList({
   );
 }
 
+function utcTodayIso(): string {
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const m = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(now.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function utcYearStartIso(): string {
+  return `${new Date().getUTCFullYear()}-01-01`;
+}
+
 export default function ReportsPage() {
   const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [summary, setSummary] = useState<ReportsSummary | null>(null);
-  const [from, setFrom] = useState("2026-01-01");
-  const [to, setTo] = useState("2026-12-31");
+  const [from, setFrom] = useState(utcYearStartIso);
+  const [to, setTo] = useState(utcTodayIso);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -168,7 +180,8 @@ export default function ReportsPage() {
       <section className="mt-12">
         <h1 className="text-3xl font-medium text-ss-text lowercase">reports</h1>
         <p className="mt-2 max-w-2xl text-sm text-ss-muted lowercase">
-          company travel analytics from selected flight and hotel offers. max range{" "}
+          committed spend from selected offers on approved, in-progress, and completed
+          trips (by start date). default range is year-to-date. max range{" "}
           {summary?.maxRangeMonths ?? 24} months.
         </p>
 
@@ -212,7 +225,7 @@ export default function ReportsPage() {
           <>
             <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <article className="rounded-3xl border border-white/15 bg-ss-surface p-6">
-                <p className="text-xs text-ss-muted lowercase">total spend</p>
+                <p className="text-xs text-ss-muted lowercase">committed spend</p>
                 <p className="mt-3 text-2xl text-ss-text">
                   {formatMoney(summary.totalSpend, summary.currency)}
                 </p>
@@ -222,7 +235,7 @@ export default function ReportsPage() {
                 <p className="mt-3 text-2xl text-ss-text">{summary.tripCount}</p>
               </article>
               <article className="rounded-3xl border border-white/15 bg-ss-surface p-6">
-                <p className="text-xs text-ss-muted lowercase">avg trip cost</p>
+                <p className="text-xs text-ss-muted lowercase">avg committed cost</p>
                 <p className="mt-3 text-2xl text-ss-text">
                   {formatMoney(summary.averageTripCost, summary.currency)}
                 </p>

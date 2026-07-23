@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Prisma, TripStatus } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import {
+  COMMITTED_TRIP_STATUSES,
   monthsBetweenInclusive,
   pickMajorityCurrency,
   roundMoney,
@@ -339,7 +340,7 @@ export class ReportsService {
       where: {
         companyId,
         deletedAt: null,
-        status: { not: TripStatus.CANCELLED },
+        status: { in: COMMITTED_TRIP_STATUSES },
         startDate: { gte: periodFrom, lte: periodTo },
       },
       include: {

@@ -41,6 +41,7 @@ import {
 } from './dto/trip-response.dto';
 import {
   decimalToNumber,
+  invalidateReportCacheForCompany,
   pickMajorityCurrency,
   roundMoney,
 } from '../../common/analytics/spend.utils';
@@ -145,6 +146,7 @@ export class TripsService {
       include: tripInclude,
     });
 
+    await this.invalidateReports(companyId);
     return this.toResponse(trip);
   }
 
@@ -408,6 +410,7 @@ export class TripsService {
       });
     });
 
+    await this.invalidateReports(trip.companyId);
     return this.toResponse(updated);
   }
 
@@ -456,6 +459,7 @@ export class TripsService {
     });
 
     await this.notifyAdminsOfSubmission(updated, actor.id);
+    await this.invalidateReports(updated.companyId);
     return this.toResponse(updated);
   }
 
@@ -505,6 +509,7 @@ export class TripsService {
       });
     });
 
+    await this.invalidateReports(trip.companyId);
     return this.toResponse(updated);
   }
 
@@ -549,6 +554,7 @@ export class TripsService {
       });
     });
 
+    await this.invalidateReports(trip.companyId);
     return this.toResponse(updated);
   }
 
@@ -605,6 +611,7 @@ export class TripsService {
       include: tripInclude,
     });
 
+    await this.invalidateReports(trip.companyId);
     return this.toResponse(updated);
   }
 
@@ -649,6 +656,7 @@ export class TripsService {
     });
 
     const updated = await this.findAccessibleTrip(actor, id);
+    await this.invalidateReports(trip.companyId);
     return this.toResponse(updated);
   }
 
@@ -692,6 +700,7 @@ export class TripsService {
     });
 
     const updated = await this.findAccessibleTrip(actor, id);
+    await this.invalidateReports(trip.companyId);
     return this.toResponse(updated);
   }
 
@@ -790,6 +799,7 @@ export class TripsService {
       );
     }
 
+    await this.invalidateReports(updated.companyId);
     return this.toResponse(updated);
   }
 
@@ -861,6 +871,7 @@ export class TripsService {
       include: tripInclude,
     });
 
+    await this.invalidateReports(trip.companyId);
     return this.toResponse(updated);
   }
 
@@ -900,6 +911,10 @@ export class TripsService {
     }
 
     return trip;
+  }
+
+  private async invalidateReports(companyId: string): Promise<void> {
+    await invalidateReportCacheForCompany(this.prisma, companyId);
   }
 
   private assertCanMutateTrip(actor: RequestUser, trip: TripRecord): void {
