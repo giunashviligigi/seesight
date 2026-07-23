@@ -8,6 +8,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { resolveTenantCompanyId } from '../../common/tenant/tenant.utils';
+import { COMMITTED_TRIP_STATUSES } from '../../common/analytics/spend.utils';
 import { RequestUser } from '../auth/types/auth.types';
 import { DashboardSummaryQueryDto } from './dto/dashboard-summary-query.dto';
 import {
@@ -54,13 +55,13 @@ export class DashboardService {
     const periodTripWhere: Prisma.TripWhereInput = {
       ...baseTripWhere,
       startDate: { gte: periodFrom, lte: periodTo },
-      status: { not: TripStatus.CANCELLED },
+      status: { in: COMMITTED_TRIP_STATUSES },
     };
 
     const monthTripWhere: Prisma.TripWhereInput = {
       ...baseTripWhere,
       startDate: { gte: monthStart, lte: monthEnd },
-      status: { not: TripStatus.CANCELLED },
+      status: { in: COMMITTED_TRIP_STATUSES },
     };
 
     const approvalWhere: Prisma.ApprovalWhereInput = {

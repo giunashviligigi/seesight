@@ -103,8 +103,8 @@ export default function DashboardPage() {
         <h1 className="text-3xl font-medium text-ss-text lowercase">dashboard</h1>
         <p className="mt-2 max-w-2xl text-sm text-ss-muted lowercase">
           {isEmployee
-            ? "your upcoming trips, pending approvals, and travel spend."
-            : "company overview — upcoming trips, spend, roster, and approvals."}
+            ? "your upcoming trips, pending approvals, and committed travel spend."
+            : "company overview — upcoming trips, committed spend, roster, and approvals."}
         </p>
 
         {error ? (
@@ -123,7 +123,7 @@ export default function DashboardPage() {
                 </p>
               </article>
               <article className="rounded-3xl border border-white/15 bg-ss-surface p-6 transition duration-300 hover:-translate-y-0.5">
-                <p className="text-xs tracking-wide text-ss-muted lowercase">travel spend (ytd)</p>
+                <p className="text-xs tracking-wide text-ss-muted lowercase">committed spend (ytd)</p>
                 <p className="mt-3 text-3xl font-medium text-ss-text">
                   {formatMoney(
                     summary.totalTravelSpending.amount,
@@ -131,6 +131,7 @@ export default function DashboardPage() {
                   )}
                 </p>
                 <p className="mt-2 text-xs text-ss-muted lowercase">
+                  approved+ trips by start date ·{" "}
                   {summary.totalTravelSpending.periodFrom} →{" "}
                   {summary.totalTravelSpending.periodTo}
                 </p>
@@ -165,7 +166,9 @@ export default function DashboardPage() {
                 </p>
               </article>
               <article className="rounded-3xl border border-white/15 bg-ss-surface p-6">
-                <p className="text-xs tracking-wide text-ss-muted lowercase">average trip cost</p>
+                <p className="text-xs tracking-wide text-ss-muted lowercase">
+                  avg committed trip cost
+                </p>
                 <p className="mt-3 text-2xl font-medium text-ss-text">
                   {formatMoney(
                     summary.statistics.averageTripCost,
@@ -185,8 +188,8 @@ export default function DashboardPage() {
 
               {isEmpty ? (
                 <p className="mt-8 text-sm text-ss-muted lowercase">
-                  no travel activity yet. once trips are created, spend and approvals will appear
-                  here.
+                  no travel activity yet. once trips are approved, committed spend and
+                  approvals will appear here.
                 </p>
               ) : null}
 

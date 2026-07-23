@@ -7,12 +7,13 @@ Company travel analytics for thesis-ready spend visibility.
 | Topic | Choice |
 |-------|--------|
 | Spend source | Sum of **selected** flight + hotel offer snapshots (same as dashboard) |
-| Trip filter | `deletedAt: null`, status not `CANCELLED`, `startDate` in range |
+| Trip filter | `deletedAt: null`, status in `APPROVED` / `IN_PROGRESS` / `COMPLETED`, `startDate` in range |
+| Default period | UTC year-to-date (same as dashboard); UI defaults match |
 | Department attribution | Primary traveler’s department (fallback: first traveler; else `unassigned`) |
 | Destinations | Group by `destinationCountry` / `destinationCity` |
-| Average cost | `totalSpend / tripsWithSpend` (trips with selected offer spend only) |
+| Average cost | `totalSpend / tripsWithSpend` (committed trips with selected offer spend only) |
 | Max range | **24 months** inclusive |
-| Cache | `ReportCache` TTL 15 minutes keyed by period |
+| Cache | `ReportCache` TTL 15 minutes; **invalidated** when trips are created/updated/deleted/status-changed |
 | Roles | `SUPER_ADMIN`, `COMPANY_ADMIN` only (employees use dashboard) |
 | Export | JSON + CSV (UTF-8 BOM for Excel) |
 | Charts | CSS bar charts using `--chart-*` tokens (no third-party chart theme) |
@@ -41,5 +42,5 @@ Company travel analytics for thesis-ready spend visibility.
 
 Acme seed includes:
 
-- Berlin (Sep 2026) — Engineering primary — selected spend **1100 EUR**
-- Paris (Oct 2026) — Sales primary — selected spend **700 EUR**
+- Berlin (Sep 2026) — Engineering primary — **pending approval** (not in committed spend)
+- Paris (Jun 2026) — Sales primary — **completed**, selected spend **700 EUR** (counts in YTD)

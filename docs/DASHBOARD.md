@@ -7,9 +7,12 @@ Operational overview for company admins and a self-scoped view for employees.
 | Topic | Choice |
 |-------|--------|
 | Endpoint | Single aggregate `GET /dashboard/summary` (no N+1 list-of-lists endpoints). |
-| Spend source | Sum of **selected** `FlightOfferSnapshot` + `HotelOfferSnapshot` prices for trips in the period (not `budgetAmount`, not `ReportCache`). |
+| Spend source | Sum of **selected** flight + hotel offer prices for **committed** trips (`APPROVED`, `IN_PROGRESS`, `COMPLETED`) in the period (not `budgetAmount`). |
+| Spend statuses | Draft / pending / rejected / cancelled trips are excluded from money metrics. |
 | Default period | UTC year-to-date (`from` = Jan 1, `to` = today). Optional `from` / `to` ISO date query params. |
+| Date field | Trip **`startDate`** must fall in the period. |
 | Upcoming trips | `startDate >= today`, status not `CANCELLED` / `COMPLETED` / `REJECTED`. List capped at 8. |
+| Trips this month | Committed trips whose `startDate` is in the current UTC month. |
 | Role scope | `COMPANY_ADMIN` / `SUPER_ADMIN` → company-wide. `EMPLOYEE` → trips where they are a traveler (`scope: "self"`). |
 | Active employees | Always company-wide `ACTIVE` + `deletedAt: null` count. |
 | Tenant | Same as roster: company admins use own `companyId`; super admins must pass `companyId`. |
@@ -48,6 +51,6 @@ Operational overview for company admins and a self-scoped view for employees.
 With `prisma db seed` and a company-admin login:
 
 - Active employees ≈ 112+
-- Pending approvals ≥ 1
-- Upcoming trips ≥ 1 (Berlin seed trip)
-- Selected spend = **1100 EUR** (620 flight + 480 hotel)
+- Pending approvals ≥ 1 (Berlin seed trip stays pending)
+- Upcoming trips ≥ 1 (Berlin Sep seed trip)
+- Committed YTD spend = **700 EUR** (Paris June completed: 400 flight + 300 hotel)
