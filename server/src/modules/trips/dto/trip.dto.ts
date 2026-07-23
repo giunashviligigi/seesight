@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { TripStatus } from '@prisma/client';
+import { BookingNeeds, TripStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
@@ -90,6 +90,16 @@ export class CreateTripDto {
   @IsString()
   @MaxLength(2000)
   notes?: string;
+
+  @ApiPropertyOptional({
+    enum: BookingNeeds,
+    default: BookingNeeds.BOTH,
+    description:
+      'What the traveler needs to book: flights and hotel, flight only, or hotel only',
+  })
+  @IsOptional()
+  @IsEnum(BookingNeeds)
+  bookingNeeds?: BookingNeeds;
 
   @ApiProperty({ type: [TripTravelerInputDto], minItems: 1 })
   @IsArray()

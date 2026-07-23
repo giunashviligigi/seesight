@@ -82,6 +82,7 @@ describe('TripsService', () => {
     budgetAmount: 1800,
     budgetCurrency: 'EUR',
     notes: null,
+    bookingNeeds: 'BOTH' as const,
     status: TripStatus.DRAFT,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -254,6 +255,81 @@ describe('TripsService', () => {
     );
   });
 
+  it('allows flight-only submit without a hotel', async () => {
+    prisma.trip.findFirst.mockResolvedValue({
+      ...baseTrip,
+      bookingNeeds: 'FLIGHT_ONLY',
+      hotelOfferSnapshots: [],
+    });
+    prisma.trip.update.mockResolvedValue({
+      ...baseTrip,
+      bookingNeeds: 'FLIGHT_ONLY',
+      hotelOfferSnapshots: [],
+      status: TripStatus.PENDING_APPROVAL,
+    });
+    prisma.approval.findUnique.mockResolvedValue(null);
+    prisma.approval.create.mockResolvedValue({
+      id: 'appr_1',
+      status: 'PENDING',
+    });
+    prisma.approvalAction.create.mockResolvedValue({});
+    prisma.trip.findUniqueOrThrow.mockResolvedValue({
+      ...baseTrip,
+      bookingNeeds: 'FLIGHT_ONLY',
+      hotelOfferSnapshots: [],
+      status: TripStatus.PENDING_APPROVAL,
+      approval: { id: 'appr_1', status: 'PENDING', decidedAt: null },
+    });
+    prisma.user.findMany.mockResolvedValue([{ id: 'admin_1' }]);
+
+    const result = await service.submit(admin, 'trip_1');
+    expect(result.status).toBe(TripStatus.PENDING_APPROVAL);
+  });
+
+  it('allows hotel-only submit without a flight', async () => {
+    prisma.trip.findFirst.mockResolvedValue({
+      ...baseTrip,
+      bookingNeeds: 'HOTEL_ONLY',
+      flightOfferSnapshots: [],
+    });
+    prisma.trip.update.mockResolvedValue({
+      ...baseTrip,
+      bookingNeeds: 'HOTEL_ONLY',
+      flightOfferSnapshots: [],
+      status: TripStatus.PENDING_APPROVAL,
+    });
+    prisma.approval.findUnique.mockResolvedValue(null);
+    prisma.approval.create.mockResolvedValue({
+      id: 'appr_1',
+      status: 'PENDING',
+    });
+    prisma.approvalAction.create.mockResolvedValue({});
+    prisma.trip.findUniqueOrThrow.mockResolvedValue({
+      ...baseTrip,
+      bookingNeeds: 'HOTEL_ONLY',
+      flightOfferSnapshots: [],
+      status: TripStatus.PENDING_APPROVAL,
+      approval: { id: 'appr_1', status: 'PENDING', decidedAt: null },
+    });
+    prisma.user.findMany.mockResolvedValue([{ id: 'admin_1' }]);
+
+    const result = await service.submit(admin, 'trip_1');
+    expect(result.status).toBe(TripStatus.PENDING_APPROVAL);
+  });
+
+  it('blocks flight-only submit without a flight', async () => {
+    prisma.trip.findFirst.mockResolvedValue({
+      ...baseTrip,
+      bookingNeeds: 'FLIGHT_ONLY',
+      flightOfferSnapshots: [],
+      hotelOfferSnapshots: [],
+    });
+
+    await expect(service.submit(admin, 'trip_1')).rejects.toThrow(
+      /select a flight/i,
+    );
+  });
+
   it('blocks submit without purpose', async () => {
     prisma.trip.findFirst.mockResolvedValue({
       ...baseTrip,
@@ -268,6 +344,10 @@ describe('TripsService', () => {
   it('cancels trip and keeps it addressable', async () => {
     prisma.trip.findFirst.mockResolvedValue(baseTrip);
     prisma.trip.update.mockResolvedValue({
+      ...baseTrip,
+      status: TripStatus.CANCELLED,
+    });
+    prisma.trip.findUniqueOrThrow.mockResolvedValue({
       ...baseTrip,
       status: TripStatus.CANCELLED,
     });
@@ -300,21 +380,7 @@ describe('TripsService', () => {
   });
 
   it('approves pending trip and notifies stakeholders', async () => {
-    prisma.trip.findFirst.mockResolvedValue({
-      ...baseTrip,
-      status: TripStatus.PENDING_APPROVAL,
-    });
-    prisma.trip.update.mockResolvedValue({
-      ...baseTrip,
-      status: TripStatus.APPROVED,
-    });
-    prisma.approval.findUnique.mockResolvedValue({
-      id: 'appr_1',
-      status: 'PENDING',
-    });
-    prisma.approval.update.mockResolvedValue({});
-    prisma.approvalAction.create.mockResolvedValue({});
-    prisma.trip.findUniqueOrThrow.mockResolvedValue({
+    const approvedTrip = {
       ...baseTrip,
       status: TripStatus.APPROVED,
       approval: {
@@ -322,7 +388,21 @@ describe('TripsService', () => {
         status: 'APPROVED',
         decidedAt: new Date(),
       },
+    };
+    prisma.trip.findFirst
+      .mockResolvedValueOnce({
+        ...baseTrip,
+        status: TripStatus.PENDING_APPROVAL,
+      })
+      .mockResolvedValueOnce(approvedTrip);
+    prisma.trip.update.mockResolvedValue(approvedTrip);
+    prisma.approval.findUnique.mockResolvedValue({
+      id: 'appr_1',
+      status: 'PENDING',
     });
+    prisma.approval.update.mockResolvedValue({});
+    prisma.approvalAction.create.mockResolvedValue({});
+    prisma.trip.findUniqueOrThrow.mockResolvedValue(approvedTrip);
 
     const result = await service.approve(otherAdmin, 'trip_1', 'Looks good');
     expect(result.status).toBe(TripStatus.APPROVED);
@@ -330,24 +410,7 @@ describe('TripsService', () => {
   });
 
   it('allows company admin to approve their own trip', async () => {
-    prisma.trip.findFirst.mockResolvedValue({
-      ...baseTrip,
-      createdByUserId: 'admin_1',
-      status: TripStatus.PENDING_APPROVAL,
-      travelers: [
-        {
-          ...baseTrip.travelers[0],
-          employee: { ...baseTrip.travelers[0].employee, userId: 'admin_1' },
-        },
-      ],
-    });
-    prisma.approval.findUnique.mockResolvedValue({
-      id: 'appr_1',
-      status: 'PENDING',
-    });
-    prisma.approval.update.mockResolvedValue({});
-    prisma.approvalAction.create.mockResolvedValue({});
-    prisma.trip.findUniqueOrThrow.mockResolvedValue({
+    const approvedTrip = {
       ...baseTrip,
       createdByUserId: 'admin_1',
       status: TripStatus.APPROVED,
@@ -356,7 +419,28 @@ describe('TripsService', () => {
         status: 'APPROVED',
         decidedAt: new Date(),
       },
+    };
+    prisma.trip.findFirst
+      .mockResolvedValueOnce({
+        ...baseTrip,
+        createdByUserId: 'admin_1',
+        status: TripStatus.PENDING_APPROVAL,
+        travelers: [
+          {
+            ...baseTrip.travelers[0],
+            employee: { ...baseTrip.travelers[0].employee, userId: 'admin_1' },
+          },
+        ],
+      })
+      .mockResolvedValueOnce(approvedTrip);
+    prisma.trip.update.mockResolvedValue(approvedTrip);
+    prisma.approval.findUnique.mockResolvedValue({
+      id: 'appr_1',
+      status: 'PENDING',
     });
+    prisma.approval.update.mockResolvedValue({});
+    prisma.approvalAction.create.mockResolvedValue({});
+    prisma.trip.findUniqueOrThrow.mockResolvedValue(approvedTrip);
 
     const result = await service.approve(admin, 'trip_1', 'Self-managed');
     expect(result.status).toBe(TripStatus.APPROVED);

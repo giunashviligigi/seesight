@@ -7,6 +7,7 @@ import {
 import {
   ApprovalActionType,
   ApprovalStatus,
+  BookingNeeds,
   NotificationType,
   OfferProvider,
   Prisma,
@@ -135,6 +136,7 @@ export class TripsService {
           dto.budgetAmount === undefined ? null : dto.budgetAmount,
         budgetCurrency: (dto.budgetCurrency || 'EUR').toUpperCase(),
         notes: dto.notes?.trim() || null,
+        bookingNeeds: dto.bookingNeeds ?? BookingNeeds.BOTH,
         status: TripStatus.DRAFT,
         travelers: {
           create: travelerInputs.map((t) => ({
@@ -661,6 +663,11 @@ export class TripsService {
         `Offers cannot be attached while status is ${trip.status}`,
       );
     }
+    if (trip.bookingNeeds === BookingNeeds.HOTEL_ONLY) {
+      throw new BadRequestException(
+        'This trip is hotel only — flight offers cannot be attached',
+      );
+    }
 
     await this.prisma.$transaction(async (tx) => {
       await tx.flightOfferSnapshot.updateMany({
@@ -704,6 +711,11 @@ export class TripsService {
     if (!EDITABLE_STATUSES.includes(trip.status)) {
       throw new BadRequestException(
         `Offers cannot be attached while status is ${trip.status}`,
+      );
+    }
+    if (trip.bookingNeeds === BookingNeeds.FLIGHT_ONLY) {
+      throw new BadRequestException(
+        'This trip is flight only — hotel offers cannot be attached',
       );
     }
 
@@ -1093,13 +1105,20 @@ export class TripsService {
 
     const hasSelectedFlight = trip.flightOfferSnapshots.some((o) => o.selected);
     const hasSelectedHotel = trip.hotelOfferSnapshots.some((o) => o.selected);
+    const needs = trip.bookingNeeds ?? BookingNeeds.BOTH;
 
-    if (!hasSelectedFlight) {
+    if (
+      (needs === BookingNeeds.BOTH || needs === BookingNeeds.FLIGHT_ONLY) &&
+      !hasSelectedFlight
+    ) {
       throw new BadRequestException(
         'Select a flight before submitting for approval',
       );
     }
-    if (!hasSelectedHotel) {
+    if (
+      (needs === BookingNeeds.BOTH || needs === BookingNeeds.HOTEL_ONLY) &&
+      !hasSelectedHotel
+    ) {
       throw new BadRequestException(
         'Select a hotel before submitting for approval',
       );
@@ -1147,6 +1166,7 @@ export class TripsService {
           : Number(trip.budgetAmount),
       budgetCurrency: trip.budgetCurrency,
       notes: trip.notes,
+      bookingNeeds: trip.bookingNeeds ?? BookingNeeds.BOTH,
       status: trip.status,
       travelers: trip.travelers.map((t) => ({
         id: t.id,

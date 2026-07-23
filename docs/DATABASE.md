@@ -55,6 +55,7 @@ erDiagram
 | `UserStatus` | `ACTIVE`, `INACTIVE` |
 | `CompanyStatus` | `ACTIVE`, `INACTIVE` |
 | `TripStatus` | `DRAFT`, `PENDING_APPROVAL`, `APPROVED`, `REJECTED`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED` |
+| `BookingNeeds` | `BOTH`, `FLIGHT_ONLY`, `HOTEL_ONLY` (set on trip create; drives search + submit) |
 | `ApprovalStatus` | `PENDING`, `APPROVED`, `REJECTED` |
 | `ApprovalActionType` | `SUBMIT`, `APPROVE`, `REJECT`, `COMMENT` |
 | `TravelClass` | `ECONOMY`, `PREMIUM_ECONOMY`, `BUSINESS`, `FIRST` |

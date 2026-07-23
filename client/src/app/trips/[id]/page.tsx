@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { authApi, AuthUser, getStoredAccessToken, storeAccessToken } from "@/lib/api/auth";
-import { tripsApi, Trip } from "@/lib/api/trips";
+import { tripsApi, Trip, BookingNeeds } from "@/lib/api/trips";
 import { approvalsApi, ApprovalHistory } from "@/lib/api/approvals";
 import { FlightOffer, HotelOffer } from "@/lib/api/travel";
 import { airportFromCityName, findAirportByIata } from "@/lib/airports";
@@ -30,6 +30,9 @@ function formatStatus(status: string) {
 }
 
 function SelectedItinerarySummary({ trip }: { trip: Trip }) {
+  const needs = trip.bookingNeeds ?? "BOTH";
+  const needsFlight = needs === "BOTH" || needs === "FLIGHT_ONLY";
+  const needsHotel = needs === "BOTH" || needs === "HOTEL_ONLY";
   const flight = trip.flightOffers?.find((o) => o.selected) ?? null;
   const hotel = trip.hotelOffers?.find((o) => o.selected) ?? null;
   const flightPrice = flight?.priceAmount ?? null;
@@ -52,6 +55,11 @@ function SelectedItinerarySummary({ trip }: { trip: Trip }) {
           </h2>
           <p className="mt-1 text-sm lowercase text-ss-muted">
             selected offers for this trip
+            {needs === "FLIGHT_ONLY"
+              ? " · flight only"
+              : needs === "HOTEL_ONLY"
+                ? " · hotel only"
+                : ""}
           </p>
         </div>
         <div className="text-right">
@@ -62,64 +70,82 @@ function SelectedItinerarySummary({ trip }: { trip: Trip }) {
         </div>
       </div>
 
-      <div className="mt-5 grid gap-4 text-sm lowercase sm:grid-cols-2">
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-          <p className="text-xs uppercase tracking-wide text-ss-muted">flight</p>
-          {flight ? (
-            <div className="mt-2 space-y-1">
-              <p className="text-base text-ss-text">
-                {originCity ? `${originCity} (${flight.origin})` : flight.origin}{" "}
-                →{" "}
-                {destCity
-                  ? `${destCity} (${flight.destination})`
-                  : flight.destination}
-              </p>
-              <p className="text-ss-muted">
-                depart {formatFlightClock(flight.departAt)}
-                {flight.departAt
-                  ? ` · ${formatFlightDateTime(flight.departAt)}`
-                  : ""}
-              </p>
-              <p className="pt-1 font-medium text-ss-text">
-                {flightPrice != null
-                  ? `${flightPrice} ${flight.currency ?? currency}`
-                  : "price n/a"}
-              </p>
-            </div>
-          ) : (
-            <p className="mt-2 text-ss-muted">none selected yet</p>
-          )}
-        </div>
+      <div
+        className={`mt-5 grid gap-4 text-sm lowercase ${
+          needsFlight && needsHotel ? "sm:grid-cols-2" : "sm:grid-cols-1"
+        }`}
+      >
+        {needsFlight ? (
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+            <p className="text-xs uppercase tracking-wide text-ss-muted">flight</p>
+            {flight ? (
+              <div className="mt-2 space-y-1">
+                <p className="text-base text-ss-text">
+                  {originCity ? `${originCity} (${flight.origin})` : flight.origin}{" "}
+                  →{" "}
+                  {destCity
+                    ? `${destCity} (${flight.destination})`
+                    : flight.destination}
+                </p>
+                <p className="text-ss-muted">
+                  depart {formatFlightClock(flight.departAt)}
+                  {flight.departAt
+                    ? ` · ${formatFlightDateTime(flight.departAt)}`
+                    : ""}
+                </p>
+                <p className="pt-1 font-medium text-ss-text">
+                  {flightPrice != null
+                    ? `${flightPrice} ${flight.currency ?? currency}`
+                    : "price n/a"}
+                </p>
+              </div>
+            ) : (
+              <p className="mt-2 text-ss-muted">none selected yet</p>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-white/10 bg-black/10 p-4 opacity-60">
+            <p className="text-xs uppercase tracking-wide text-ss-muted">flight</p>
+            <p className="mt-2 text-ss-muted">not needed for this trip</p>
+          </div>
+        )}
 
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-          <p className="text-xs uppercase tracking-wide text-ss-muted">hotel</p>
-          {hotel ? (
-            <div className="mt-2 space-y-1">
-              <p className="text-base text-ss-text">{hotel.hotelName}</p>
-              <p className="text-ss-muted">
-                {hotel.city ?? "—"}
-                {hotel.checkIn && hotel.checkOut
-                  ? ` · ${hotel.checkIn} → ${hotel.checkOut}`
-                  : ""}
-                {(() => {
-                  const nights = nightsBetween(hotel.checkIn, hotel.checkOut);
-                  const label = formatNights(nights);
-                  return label ? ` · ${label}` : "";
-                })()}
-              </p>
-              <p className="pt-1 font-medium text-ss-text">
-                {formatHotelStayPrice({
-                  priceAmount: hotelPrice,
-                  currency: hotel.currency ?? currency,
-                  checkIn: hotel.checkIn,
-                  checkOut: hotel.checkOut,
-                })}
-              </p>
-            </div>
-          ) : (
-            <p className="mt-2 text-ss-muted">none selected yet</p>
-          )}
-        </div>
+        {needsHotel ? (
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+            <p className="text-xs uppercase tracking-wide text-ss-muted">hotel</p>
+            {hotel ? (
+              <div className="mt-2 space-y-1">
+                <p className="text-base text-ss-text">{hotel.hotelName}</p>
+                <p className="text-ss-muted">
+                  {hotel.city ?? "—"}
+                  {hotel.checkIn && hotel.checkOut
+                    ? ` · ${hotel.checkIn} → ${hotel.checkOut}`
+                    : ""}
+                  {(() => {
+                    const nights = nightsBetween(hotel.checkIn, hotel.checkOut);
+                    const label = formatNights(nights);
+                    return label ? ` · ${label}` : "";
+                  })()}
+                </p>
+                <p className="pt-1 font-medium text-ss-text">
+                  {formatHotelStayPrice({
+                    priceAmount: hotelPrice,
+                    currency: hotel.currency ?? currency,
+                    checkIn: hotel.checkIn,
+                    checkOut: hotel.checkOut,
+                  })}
+                </p>
+              </div>
+            ) : (
+              <p className="mt-2 text-ss-muted">none selected yet</p>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-white/10 bg-black/10 p-4 opacity-60">
+            <p className="text-xs uppercase tracking-wide text-ss-muted">hotel</p>
+            <p className="mt-2 text-ss-muted">not needed for this trip</p>
+          </div>
+        )}
       </div>
 
       {flight && hotel && total != null ? (
@@ -270,12 +296,13 @@ export default function TripDetailPage() {
     if (!purpose.trim()) {
       throw new ApiError("purpose of trip is required", 400);
     }
+    const needs = current.bookingNeeds ?? "BOTH";
     const hasFlight = current.flightOffers.some((o) => o.selected);
     const hasHotel = current.hotelOffers.some((o) => o.selected);
-    if (!hasFlight) {
+    if ((needs === "BOTH" || needs === "FLIGHT_ONLY") && !hasFlight) {
       throw new ApiError("select a flight before submitting for approval", 400);
     }
-    if (!hasHotel) {
+    if ((needs === "BOTH" || needs === "HOTEL_ONLY") && !hasHotel) {
       throw new ApiError("select a hotel before submitting for approval", 400);
     }
   }
@@ -350,8 +377,15 @@ export default function TripDetailPage() {
     trip.status === "COMPLETED";
   const hasSelectedFlight = trip.flightOffers.some((o) => o.selected);
   const hasSelectedHotel = trip.hotelOffers.some((o) => o.selected);
+  const bookingNeeds: BookingNeeds = trip.bookingNeeds ?? "BOTH";
+  const needsFlight =
+    bookingNeeds === "BOTH" || bookingNeeds === "FLIGHT_ONLY";
+  const needsHotel =
+    bookingNeeds === "BOTH" || bookingNeeds === "HOTEL_ONLY";
   const canSubmit =
-    Boolean(purpose.trim()) && hasSelectedFlight && hasSelectedHotel;
+    Boolean(purpose.trim()) &&
+    (!needsFlight || hasSelectedFlight) &&
+    (!needsHotel || hasSelectedHotel);
 
   return (
     <AppShell user={user}>
@@ -431,11 +465,16 @@ export default function TripDetailPage() {
                 <p className="text-xs text-ss-muted lowercase">
                   {!purpose.trim()
                     ? "add a purpose of trip before submitting."
-                    : !hasSelectedFlight && !hasSelectedHotel
+                    : needsFlight &&
+                        needsHotel &&
+                        !hasSelectedFlight &&
+                        !hasSelectedHotel
                       ? "select a flight and a hotel before submitting."
-                      : !hasSelectedFlight
+                      : needsFlight && !hasSelectedFlight
                         ? "select a flight before submitting."
-                        : "select a hotel before submitting."}
+                        : needsHotel && !hasSelectedHotel
+                          ? "select a hotel before submitting."
+                          : "finish selecting offers before submitting."}
                 </p>
               ) : null}
             </div>
@@ -600,6 +639,7 @@ export default function TripDetailPage() {
             <TripSearchWidget
               tripId={trip.id}
               accessToken={token}
+              bookingNeeds={bookingNeeds}
               defaultOrigin=""
               defaultDestination={
                 airportFromCityName(trip.destinationCity)?.iata ?? ""

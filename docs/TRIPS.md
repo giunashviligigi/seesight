@@ -34,12 +34,12 @@ Invalid transitions return **400** with message `Invalid status transition from 
 
 | Topic | Choice |
 |-------|--------|
-| Create | Always starts as `DRAFT`. Requires ≥1 traveler (`TripTraveler`) and a non-empty **purpose**. |
+| Create | Always starts as `DRAFT`. Requires ≥1 traveler (`TripTraveler`) and a non-empty **purpose**. Choose `bookingNeeds`: `BOTH` (default), `FLIGHT_ONLY`, or `HOTEL_ONLY`. |
 | Group travel | Multiple employees; duplicate traveler ids rejected; primary auto-assigned if omitted. |
 | Edit lock | Editable in `DRAFT` and `REJECTED` only (locked while pending — M10). |
 | Cancel | Soft status only — row kept (`deletedAt` unused for cancel). Visible in list filters. |
 | Delete | Soft-delete via `deletedAt`. Allowed in **any** status including `IN_PROGRESS` and `COMPLETED`. Closes open approvals. Hidden from lists. |
-| Submit | Requires purpose + selected flight + selected hotel. Creates/updates `Approval` (`PENDING`) + `ApprovalAction.SUBMIT`. |
+| Submit | Requires purpose + offers matching `bookingNeeds` (`BOTH` → flight and hotel; `FLIGHT_ONLY` → flight; `HOTEL_ONLY` → hotel). Creates/updates `Approval` (`PENDING`) + `ApprovalAction.SUBMIT`. |
 | Employee scope | List/detail limited to trips they created or travel on; must include self when creating. |
 | Tenant | Company admin own company; super admin passes `companyId`. |
 | Department filter | Trips that include a traveler in the given department. |

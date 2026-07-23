@@ -10,6 +10,8 @@ export type TripStatus =
   | "COMPLETED"
   | "CANCELLED";
 
+export type BookingNeeds = "BOTH" | "FLIGHT_ONLY" | "HOTEL_ONLY";
+
 export type TripTraveler = {
   id: string;
   employeeId: string;
@@ -33,6 +35,7 @@ export type Trip = {
   budgetAmount: number | null;
   budgetCurrency: string;
   notes: string | null;
+  bookingNeeds: BookingNeeds;
   status: TripStatus;
   travelers: TripTraveler[];
   approval: {
@@ -89,6 +92,7 @@ export type CreateTripInput = {
   budgetAmount?: number;
   budgetCurrency?: string;
   notes?: string;
+  bookingNeeds?: BookingNeeds;
   travelers: TripTravelerInput[];
   companyId?: string;
 };

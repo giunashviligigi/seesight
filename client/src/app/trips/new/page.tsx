@@ -11,18 +11,41 @@ import {
 } from "@/lib/api/auth";
 import { companiesApi } from "@/lib/api/companies";
 import { employeesApi } from "@/lib/api/employees";
-import { tripsApi } from "@/lib/api/trips";
+import { BookingNeeds, tripsApi } from "@/lib/api/trips";
 import { readCompanyBudgetPolicy } from "@/lib/budget-policy";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+const BOOKING_OPTIONS: Array<{
+  value: BookingNeeds;
+  label: string;
+  hint: string;
+}> = [
+  {
+    value: "BOTH",
+    label: "flights and hotel",
+    hint: "search and select both a flight and a hotel",
+  },
+  {
+    value: "FLIGHT_ONLY",
+    label: "flight only",
+    hint: "plan travel without a hotel booking",
+  },
+  {
+    value: "HOTEL_ONLY",
+    label: "hotel only",
+    hint: "plan a stay without a flight booking",
+  },
+];
+
 /** Create a draft trip — purpose is required before booking. */
 export default function NewTripPage() {
   const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [purpose, setPurpose] = useState("");
+  const [bookingNeeds, setBookingNeeds] = useState<BookingNeeds>("BOTH");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -110,6 +133,7 @@ export default function NewTripPage() {
       const created = await tripsApi.create(
         {
           purpose: nextPurpose,
+          bookingNeeds,
           budgetAmount,
           budgetCurrency,
           travelers: [{ employeeId: travelerId, isPrimary: true }],
@@ -149,8 +173,8 @@ export default function NewTripPage() {
       <section className="mt-12 rounded-3xl border border-white/15 bg-ss-surface p-8">
         <h1 className="text-3xl font-medium text-ss-text lowercase">new trip</h1>
         <p className="mt-2 text-sm text-ss-muted lowercase">
-          start with the purpose of travel, then pick flights and hotels on the
-          next screen.
+          start with the purpose of travel and what you need to book, then continue
+          to search on the next screen.
         </p>
 
         <form className="mt-8 space-y-5" onSubmit={(e) => void onCreate(e)}>
@@ -168,6 +192,45 @@ export default function NewTripPage() {
               className="h-11 rounded-xl border-white/20 bg-ss-surface-strong text-ss-text"
             />
           </div>
+
+          <fieldset className="space-y-3">
+            <legend className="text-sm lowercase text-ss-muted">
+              what do you need to book? <span className="text-red-300">*</span>
+            </legend>
+            <div className="grid gap-2">
+              {BOOKING_OPTIONS.map((option) => {
+                const selected = bookingNeeds === option.value;
+                return (
+                  <label
+                    key={option.value}
+                    className={`flex cursor-pointer flex-col rounded-2xl border px-4 py-3 transition ${
+                      selected
+                        ? "border-ss-accent bg-ss-accent/10"
+                        : "border-white/15 bg-ss-surface-strong hover:border-white/30"
+                    }`}
+                  >
+                    <span className="flex items-center gap-3">
+                      <input
+                        type="radio"
+                        name="bookingNeeds"
+                        value={option.value}
+                        checked={selected}
+                        disabled={creating}
+                        onChange={() => setBookingNeeds(option.value)}
+                        className="accent-[var(--ss-accent,#3b82f6)]"
+                      />
+                      <span className="text-sm lowercase text-ss-text">
+                        {option.label}
+                      </span>
+                    </span>
+                    <span className="mt-1 pl-7 text-xs lowercase text-ss-muted">
+                      {option.hint}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
 
           {error ? (
             <p className="text-sm text-red-300 lowercase" role="alert">

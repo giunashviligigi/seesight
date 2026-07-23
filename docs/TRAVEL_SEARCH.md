@@ -13,7 +13,7 @@ Flight and hotel search via **SerpAPI** (`google_flights` / `google_hotels`).
 | Response shape | Normalized DTOs only — vendor keys never returned at top level |
 | Cache | In-memory TTL (~60s) for identical searches |
 | Rate limit | ~30 requests / minute / user |
-| Attach | One selected flight + one selected hotel per trip (`selected=true`) |
+| Attach | One selected flight and/or hotel per trip (`selected=true`), based on trip `bookingNeeds` |
 | Editable statuses | Attach / field edits allowed in `DRAFT` and `REJECTED` only (locked while `PENDING_APPROVAL` — M10) |
 | Provider enum | `OfferProvider.SERPAPI` (enum also retains unused legacy `AMADEUS`) |
 | Date bounds | `departureDate` / `checkIn` must be **today or later** (UTC). `returnDate` ≥ `departureDate`; `checkOut` ≥ `checkIn`. |

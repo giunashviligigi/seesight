@@ -19,12 +19,14 @@ import {
   nightsBetween,
 } from "@/lib/format-travel";
 import { parseTravelPrompt } from "@/lib/parse-travel-prompt";
+import type { BookingNeeds } from "@/lib/api/trips";
 
 const PAGE_SIZE = 3;
 
 type TripSearchWidgetProps = {
   tripId: string;
   accessToken: string;
+  bookingNeeds?: BookingNeeds;
   defaultOrigin?: string;
   defaultDestination?: string;
   defaultCity?: string;
@@ -105,6 +107,7 @@ function clampHotelNights(value: number): number {
 export function TripSearchWidget({
   tripId,
   accessToken,
+  bookingNeeds = "BOTH",
   defaultOrigin = "",
   defaultDestination = "",
   defaultCity = "",
@@ -116,6 +119,22 @@ export function TripSearchWidget({
   onCriteriaChange,
   disabled = false,
 }: TripSearchWidgetProps) {
+  const needsFlight =
+    bookingNeeds === "BOTH" || bookingNeeds === "FLIGHT_ONLY";
+  const needsHotel =
+    bookingNeeds === "BOTH" || bookingNeeds === "HOTEL_ONLY";
+  const searchLabel =
+    needsFlight && needsHotel
+      ? "search flights & hotels"
+      : needsFlight
+        ? "search flights"
+        : "search hotels";
+  const suggestLabel =
+    needsFlight && needsHotel
+      ? "suggest flights & hotels"
+      : needsFlight
+        ? "suggest flights"
+        : "suggest hotels";
   const today = useMemo(() => utcTodayIso(), []);
   const [origin, setOrigin] = useState(defaultOrigin.toUpperCase());
   const [destination, setDestination] = useState(
@@ -247,28 +266,37 @@ export function TripSearchWidget({
       params.tripType === "round_trip" && returnDate
         ? returnDate
         : addUtcDays(params.depart, nights);
+
+    const flightPromise = needsFlight
+      ? travelApi.searchFlights(
+          {
+            origin: params.origin,
+            destination: params.destination,
+            departureDate: params.depart,
+            returnDate,
+            adults: params.adults,
+            currency,
+          },
+          accessToken,
+        )
+      : Promise.resolve({ items: [] as FlightOffer[], cached: false, provider: "none" });
+
+    const hotelPromise = needsHotel
+      ? travelApi.searchHotels(
+          {
+            city: hotelCity,
+            checkIn: params.depart,
+            checkOut: hotelCheckOut,
+            adults: params.adults,
+            currency,
+          },
+          accessToken,
+        )
+      : Promise.resolve({ items: [] as HotelOffer[], cached: false, provider: "none" });
+
     const [flightResult, hotelResult] = await Promise.all([
-      travelApi.searchFlights(
-        {
-          origin: params.origin,
-          destination: params.destination,
-          departureDate: params.depart,
-          returnDate,
-          adults: params.adults,
-          currency,
-        },
-        accessToken,
-      ),
-      travelApi.searchHotels(
-        {
-          city: hotelCity,
-          checkIn: params.depart,
-          checkOut: hotelCheckOut,
-          adults: params.adults,
-          currency,
-        },
-        accessToken,
-      ),
+      flightPromise,
+      hotelPromise,
     ]);
     const nextFlights = sortByPrice(flightResult.items);
     const nextHotels = sortByPrice(hotelResult.items);
@@ -299,9 +327,21 @@ export function TripSearchWidget({
   async function onSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (disabled) return;
-    if (origin.length !== 3 || destination.length !== 3) {
+    if (needsFlight && (origin.length !== 3 || destination.length !== 3)) {
       setError("pick a city/airport from the list for from and to");
       return;
+    }
+    if (needsHotel && !needsFlight) {
+      const hotelCity =
+        city.trim() || findAirportByIata(destination)?.city || destination;
+      if (!hotelCity.trim()) {
+        setError("enter a city for the hotel search");
+        return;
+      }
+      if (!depart) {
+        setError("pick a check-in date");
+        return;
+      }
     }
     const dateError = assertTravelDates(depart, ret, tripType);
     if (dateError) {
@@ -325,9 +365,20 @@ export function TripSearchWidget({
           tripType,
           hotelNights: nightsCount,
         });
+      const parts: string[] = [];
+      if (needsFlight) {
+        parts.push(
+          `${nextFlights.length} flights (${tripType === "round_trip" ? "round trip" : "one way"})`,
+        );
+      }
+      if (needsHotel) {
+        parts.push(`${nextHotels.length} hotels`);
+      }
       setMessage(
-        `found ${nextFlights.length} flights (${tripType === "round_trip" ? "round trip" : "one way"}) and ${nextHotels.length} hotels · showing top ${PAGE_SIZE}` +
-          (tripType === "one_way" ? ` · ${formatNights(nightsCount)} hotel` : "") +
+        `found ${parts.join(" and ")} · showing top ${PAGE_SIZE}` +
+          (needsHotel && tripType === "one_way"
+            ? ` · ${formatNights(nightsCount)} hotel`
+            : "") +
           (flightResult.cached || hotelResult.cached ? " (cached)" : ""),
       );
     } catch (err) {
@@ -807,7 +858,7 @@ export function TripSearchWidget({
           >
             {suggesting && !clarifyingQuestion
               ? "suggesting…"
-              : "suggest flights & hotels"}
+              : suggestLabel}
           </Button>
         </div>
 
@@ -978,7 +1029,7 @@ export function TripSearchWidget({
             disabled={disabled || searching}
             className="h-11 rounded-full bg-ss-accent px-8 text-white lowercase hover:bg-ss-accent-hover"
           >
-            {searching ? "searching market…" : "search flights & hotels"}
+            {searching ? "searching market…" : searchLabel}
           </Button>
         </div>
       </form>
@@ -1004,7 +1055,12 @@ export function TripSearchWidget({
       ) : null}
 
       {hasSearched ? (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div
+          className={`grid gap-6 ${
+            needsFlight && needsHotel ? "lg:grid-cols-2" : "lg:grid-cols-1"
+          }`}
+        >
+          {needsFlight ? (
           <div>
             <h3 className="text-sm text-ss-muted lowercase">
               flights · cheapest first · showing {visibleFlights.length} of{" "}
@@ -1153,6 +1209,8 @@ export function TripSearchWidget({
               </>
             )}
           </div>
+          ) : null}
+          {needsHotel ? (
           <div>
             <h3 className="text-sm text-ss-muted lowercase">
               hotels · cheapest first · stay total · showing{" "}
@@ -1262,6 +1320,7 @@ export function TripSearchWidget({
               </>
             )}
           </div>
+          ) : null}
         </div>
       ) : null}
 
