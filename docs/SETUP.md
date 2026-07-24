@@ -18,8 +18,8 @@ cp client/.env.example client/.env.local
 
 # Required API keys in server/.env (not Amadeus / OpenAI):
 #   SERPAPI_API_KEY  — flight/hotel search (M8)
-#   GEMINI_API_KEY   — AI recommendations (M9)
-#   AI_PROVIDER=gemini
+#   GROQ_API_KEY     — AI recommendations / NL parse (free tier)
+#   AI_PROVIDER=groq
 
 cd server && npm install && npx prisma generate && cd ..
 cd client && npm install && cd ..
@@ -83,7 +83,7 @@ Open [http://localhost:3000](http://localhost:3000)
 docker compose -f docker/docker-compose.yml up --build
 ```
 
-Put `SERPAPI_API_KEY` and `GEMINI_API_KEY` in `server/.env`. The API container loads that file (`env_file`); `DATABASE_URL` is still overridden for the Compose network.
+Put `SERPAPI_API_KEY` and `GROQ_API_KEY` (with `AI_PROVIDER=groq`) in `server/.env`. The API container loads that file (`env_file`); `DATABASE_URL` is still overridden for the Compose network.
 
 - Web: http://localhost:3000  
 - API: http://localhost:3001/health  

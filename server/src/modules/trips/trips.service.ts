@@ -7,6 +7,7 @@ import {
 import {
   ApprovalActionType,
   ApprovalStatus,
+  BookingMode,
   NotificationType,
   OfferProvider,
   Prisma,
@@ -135,6 +136,7 @@ export class TripsService {
           dto.budgetAmount === undefined ? null : dto.budgetAmount,
         budgetCurrency: (dto.budgetCurrency || 'EUR').toUpperCase(),
         notes: dto.notes?.trim() || null,
+        bookingMode: dto.bookingMode ?? BookingMode.BOTH,
         status: TripStatus.DRAFT,
         travelers: {
           create: travelerInputs.map((t) => ({
@@ -438,6 +440,9 @@ export class TripsService {
             : {}),
           ...(dto.notes !== undefined
             ? { notes: dto.notes ? dto.notes.trim() : null }
+            : {}),
+          ...(dto.bookingMode !== undefined
+            ? { bookingMode: dto.bookingMode }
             : {}),
         },
         include: tripInclude,
@@ -1091,15 +1096,16 @@ export class TripsService {
 
     this.requirePurpose(trip.purpose);
 
+    const mode = trip.bookingMode ?? BookingMode.BOTH;
     const hasSelectedFlight = trip.flightOfferSnapshots.some((o) => o.selected);
     const hasSelectedHotel = trip.hotelOfferSnapshots.some((o) => o.selected);
 
-    if (!hasSelectedFlight) {
+    if (mode !== BookingMode.HOTELS && !hasSelectedFlight) {
       throw new BadRequestException(
         'Select a flight before submitting for approval',
       );
     }
-    if (!hasSelectedHotel) {
+    if (mode !== BookingMode.FLIGHTS && !hasSelectedHotel) {
       throw new BadRequestException(
         'Select a hotel before submitting for approval',
       );
@@ -1147,6 +1153,7 @@ export class TripsService {
           : Number(trip.budgetAmount),
       budgetCurrency: trip.budgetCurrency,
       notes: trip.notes,
+      bookingMode: trip.bookingMode ?? BookingMode.BOTH,
       status: trip.status,
       travelers: trip.travelers.map((t) => ({
         id: t.id,

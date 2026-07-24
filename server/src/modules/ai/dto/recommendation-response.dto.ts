@@ -47,13 +47,17 @@ export class RecommendItineraryResponseDto {
   @ApiProperty()
   tripId!: string;
 
-  @ApiProperty({ example: 'gemini' })
+  @ApiProperty({
+    description: 'Active LLM provider name, or rule_based on fallback',
+    example: 'groq',
+  })
   provider!: string;
 
   @ApiProperty({
-    description: 'gemini | rule_based — rule_based means LLM fallback',
+    description: 'gemini | groq | rule_based — rule_based means LLM fallback',
+    enum: ['gemini', 'groq', 'rule_based'],
   })
-  source!: 'gemini' | 'rule_based';
+  source!: 'gemini' | 'groq' | 'rule_based';
 
   @ApiPropertyOptional({ nullable: true })
   promptSummary!: string | null;
@@ -75,8 +79,8 @@ export class RecommendationHistoryItemDto {
   @ApiProperty()
   provider!: string;
 
-  @ApiProperty({ enum: ['gemini', 'rule_based'] })
-  source!: 'gemini' | 'rule_based';
+  @ApiProperty({ enum: ['gemini', 'groq', 'rule_based'] })
+  source!: 'gemini' | 'groq' | 'rule_based';
 
   @ApiPropertyOptional({ nullable: true })
   promptSummary!: string | null;

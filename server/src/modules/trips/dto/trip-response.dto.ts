@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ApprovalStatus, TripStatus } from '@prisma/client';
+import { ApprovalStatus, BookingMode, TripStatus } from '@prisma/client';
 
 export class TripTravelerResponseDto {
   @ApiProperty()
@@ -135,6 +135,9 @@ export class TripResponseDto {
 
   @ApiPropertyOptional({ nullable: true, type: String })
   notes!: string | null;
+
+  @ApiProperty({ enum: BookingMode, default: BookingMode.BOTH })
+  bookingMode!: BookingMode;
 
   @ApiProperty({ enum: TripStatus })
   status!: TripStatus;

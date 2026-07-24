@@ -1,35 +1,43 @@
 # AI Recommendations (Milestone 9)
 
-Explainable itinerary recommendations using Gemini, with a rule-based fallback.
+Explainable itinerary recommendations using an LLM provider (Groq or Gemini), with a rule-based fallback.
 
 ## Decisions
 
 | Topic | Choice |
 |-------|--------|
-| Primary provider | Google Gemini (`gemini-2.0-flash`) |
-| Abstraction | `AiProvider` interface; `GeminiProvider` is the active binding |
-| Other LLMs | Not used in production — abstraction allows a future swap without API changes |
+| Primary provider (local default) | **Groq** (`llama-3.3-70b-versatile`) — free tier |
+| Alternate provider | Google Gemini (`gemini-2.0-flash`) via `AI_PROVIDER=gemini` |
+| Abstraction | `AiProvider` interface; `GroqProvider` / `GeminiProvider` selected by `AI_PROVIDER` |
 | Input | Trip constraints + shortlisted offers (request body) **or** attached trip snapshots |
 | Output | Structured JSON only (`RecommendationResultDto`) |
 | Persistence | `AiRecommendation` rows linked to `tripId` |
-| Failure mode | If Gemini is down / misconfigured / returns unusable output → **rule-based ranking** |
+| Failure mode | If LLM is down / misconfigured / returns unusable output → **rule-based ranking** |
 | Safety | No passwords/tokens/emails/passports in prompts; policy JSON keys containing secrets are stripped |
 | Rate limit | ~10 requests / minute / user |
 | Token guard | `AI_MAX_OUTPUT_TOKENS` (default 1024); max 8 offers per type |
-| NL travel parse | Gemini extracts cities/countries/dates; server resolves to IATA via global airport dataset (`airports.json`, ~8.8k commercial airports). Country names map to that country’s primary hub. Incomplete prompts return one `clarifyingQuestion` (e.g. “Where are you departing from?”) instead of a generic failure — the UI collects a follow-up and re-parses. One calendar date → `one_way`; two dates → `round_trip`. Stay phrases like “five nights” set hotel checkout when a departure exists. No model fine-tuning. |
+| NL travel parse | **LLM-first, confirm-only Q&A**: free-text is classified as travel or not. Non-travel prompts set `isTravelRequest=false` and start destination Q&A — never invent cities/dates. Continue answers confirm **one field** at a time. Required before SerpAPI: destination → origin → trip type → departure → return (round-trip) or hotel nights (one-way). IATA via `airports.json`. |
 
 ## Environment
 
 ```bash
-AI_PROVIDER=gemini
+# groq (recommended free tier) or gemini
+AI_PROVIDER=groq
+GROQ_API_KEY=
+GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_BASE_URL=https://api.groq.com/openai/v1
+
 GEMINI_API_KEY=
 GEMINI_MODEL=gemini-2.0-flash
 GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+
 AI_MAX_OUTPUT_TOKENS=1024
 AI_MAX_OFFERS_PER_TYPE=8
 AI_RATE_LIMIT_PER_MINUTE=10
 AI_TEMPERATURE=0.2
 ```
+
+Get a free Groq key: https://console.groq.com/keys
 
 ## Endpoints
 
@@ -41,10 +49,13 @@ AI_TEMPERATURE=0.2
 
 ### NL travel parse (`POST /ai/parse-travel-intent`)
 
-- Body: `{ prompt, referenceDate? }` (prompt up to 2000 chars; follow-ups may append prior context)
-- Response includes IATA/cities/dates/`tripType`/`adults`/`notes`/`source`
-- When origin, destination, or departure date is still missing: `clarifyingQuestion` is a single natural question; otherwise `null`
-- Client trip search widget soft-fills known fields, shows the question, and re-parses after the traveler answers
+- Body: `{ prompt, referenceDate?, clarificationAnswer?, clarificationFocus? }`
+  - `clarificationFocus`: `origin` | `destination` | `departureDate` | `returnDate` | `tripType` | `hotelNights`
+- Response includes `isTravelRequest`, IATA/cities/dates/`tripType`/`hotelNights`/`adults`/`notes`/`source`, plus `clarifyingQuestion` and `clarificationFocus`
+- Non-travel prompts: `isTravelRequest=false`, all fields null, question starts destination Q&A (no invented search)
+- Continue rounds confirm **one field at a time** (no Gemini invent-on-reparse)
+- Client never calls SerpAPI until the confirmed draft is complete
+- Status line shows “analyzed by gemini” when applicable
 
 ### Request body (`POST`)
 

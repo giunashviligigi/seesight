@@ -40,14 +40,21 @@ import {
 } from './dto/parse-travel-intent.dto';
 import {
   PARSE_TRAVEL_SYSTEM,
+  PARSE_TRAVEL_SYSTEM_HOTELS,
   applyClarificationAnswer,
   applyStayNights,
   buildParseTravelPrompt,
+  clampHotelNights,
+  deriveHotelNights,
+  emptyTravelIntent,
   extractStayNights,
   finalizeTravelIntent,
+  hasTravelSignals,
   heuristicParseTravelIntent,
   inferClarificationFocus,
+  preferConfirmedDraft,
   type ClarificationFocus,
+  type ParseBookingMode,
 } from './parse-travel-intent';
 import { resolvePlaceQuery } from './city-airports';
 
@@ -120,7 +127,8 @@ export class AiService {
     });
 
     let recommendation: RecommendationResultDto;
-    let source: 'gemini' | 'rule_based' = 'gemini';
+    let source: 'gemini' | 'groq' | 'rule_based' =
+      this.aiProvider.name === 'groq' ? 'groq' : 'gemini';
     let providerName = this.aiProvider.name;
 
     try {
@@ -142,6 +150,7 @@ export class AiService {
         currency,
       );
       providerName = generated.provider;
+      source = generated.provider === 'groq' ? 'groq' : 'gemini';
     } catch (error) {
       this.logger.warn(
         `AI provider failed; using rule-based fallback (${error instanceof Error ? error.message : 'unknown'})`,
@@ -189,13 +198,18 @@ export class AiService {
     return {
       items: rows.map((row) => {
         const recommendation = normalizeStoredRecommendation(row.responseJson);
-        const source =
+        const rawSource =
           typeof row.responseJson === 'object' &&
           row.responseJson !== null &&
-          !Array.isArray(row.responseJson) &&
-          (row.responseJson as Record<string, unknown>).source === 'rule_based'
+          !Array.isArray(row.responseJson)
+            ? (row.responseJson as Record<string, unknown>).source
+            : undefined;
+        const source =
+          rawSource === 'rule_based'
             ? ('rule_based' as const)
-            : ('gemini' as const);
+            : rawSource === 'groq' || row.provider === 'groq'
+              ? ('groq' as const)
+              : ('gemini' as const);
 
         return {
           id: row.id,
@@ -221,7 +235,50 @@ export class AiService {
         ? new Date(dto.referenceDate)
         : new Date();
     const referenceIso = toDateString(reference);
-    const fallback = heuristicParseTravelIntent(dto.prompt, reference);
+    const clarificationAnswer = dto.clarificationAnswer?.trim();
+    const bookingMode: ParseBookingMode = dto.bookingMode ?? 'BOTH';
+
+    // Continue rounds: keep confirmed draft fields, then apply only the new answer.
+    // Do NOT let a fresh LLM pass invent destination/tripType/dates/nights.
+    if (clarificationAnswer) {
+      const heuristic = heuristicParseTravelIntent(
+        dto.prompt,
+        reference,
+        bookingMode,
+      );
+      const base = preferConfirmedDraft(
+        { ...heuristic, isTravelRequest: true },
+        dto.draft,
+        bookingMode,
+      );
+      const focus: ClarificationFocus | null =
+        dto.clarificationFocus ??
+        inferClarificationFocus(base, bookingMode);
+      const parsed = applyClarificationAnswer(
+        base,
+        clarificationAnswer,
+        focus,
+        reference,
+        dto.prompt,
+        bookingMode,
+      );
+      // Continue rounds are local apply steps; keep the active LLM label so the UI
+      // does not flash "offline parse" after a successful Groq/Gemini first pass.
+      const withSource: ParseTravelIntentResponseDto = {
+        ...parsed,
+        source: this.llmSource(),
+      };
+      this.logger.log(
+        `Clarification (${focus ?? 'auto'}): ${withSource.originIata ?? '?'}→${withSource.destinationIata ?? '?'} type=${withSource.tripType ?? '?'} dates=${withSource.departureDate ?? '?'} ready=${!withSource.clarifyingQuestion}`,
+      );
+      return withSource;
+    }
+
+    const fallback = heuristicParseTravelIntent(
+      dto.prompt,
+      reference,
+      bookingMode,
+    );
 
     let parsed: ParseTravelIntentResponseDto;
     try {
@@ -233,8 +290,15 @@ export class AiService {
       );
 
       const generated = await this.aiProvider.generate({
-        systemInstruction: PARSE_TRAVEL_SYSTEM,
-        userPrompt: buildParseTravelPrompt(dto.prompt, referenceIso),
+        systemInstruction:
+          bookingMode === 'HOTELS'
+            ? PARSE_TRAVEL_SYSTEM_HOTELS
+            : PARSE_TRAVEL_SYSTEM,
+        userPrompt: buildParseTravelPrompt(
+          dto.prompt,
+          referenceIso,
+          bookingMode,
+        ),
         maxOutputTokens,
         temperature,
       });
@@ -243,30 +307,16 @@ export class AiService {
         generated.text,
         fallback,
         dto.prompt,
+        bookingMode,
       );
       this.logger.log(
-        `Travel intent parsed via gemini: ${parsed.originIata ?? '?'}→${parsed.destinationIata ?? '?'} dates=${parsed.departureDate ?? '?'}..${parsed.returnDate ?? '?'} type=${parsed.tripType ?? '?'}`,
+        `Travel intent parsed via ${this.llmSource()}: travel=${parsed.isTravelRequest} ${parsed.originIata ?? '?'}→${parsed.destinationIata ?? '?'} dates=${parsed.departureDate ?? '?'}..${parsed.returnDate ?? '?'} type=${parsed.tripType ?? '?'}`,
       );
     } catch (error) {
       this.logger.warn(
         `Travel intent parse failed; using heuristic (${error instanceof Error ? error.message : 'unknown'})`,
       );
       parsed = fallback;
-    }
-
-    if (dto.clarificationAnswer?.trim()) {
-      const focus: ClarificationFocus | null =
-        dto.clarificationFocus ?? inferClarificationFocus(parsed);
-      parsed = applyClarificationAnswer(
-        parsed,
-        dto.clarificationAnswer,
-        focus,
-        reference,
-        dto.prompt,
-      );
-      this.logger.log(
-        `Applied clarification (${focus ?? 'auto'}): ${parsed.originIata ?? '?'}→${parsed.destinationIata ?? '?'} dates=${parsed.departureDate ?? '?'}`,
-      );
     }
 
     return parsed;
@@ -276,12 +326,24 @@ export class AiService {
     text: string,
     fallback: ParseTravelIntentResponseDto,
     originalPrompt: string,
+    bookingMode: ParseBookingMode = 'BOTH',
   ): ParseTravelIntentResponseDto {
     let obj: Record<string, unknown>;
     try {
       obj = parseJsonObject(text);
     } catch {
       return fallback;
+    }
+
+    const travelFlag =
+      typeof obj.isTravelRequest === 'boolean' ? obj.isTravelRequest : null;
+    if (travelFlag === false || !hasTravelSignals(originalPrompt)) {
+      return emptyTravelIntent(
+        this.llmSource(),
+        ['not a travel request'],
+        false,
+        bookingMode,
+      );
     }
 
     const originCity =
@@ -291,7 +353,8 @@ export class AiService {
         ? obj.destinationCity.trim()
         : null;
 
-    // Prefer validating Gemini IATA against the global DB; fall back to city/country text.
+    // Validate Gemini IATA against the global DB; resolve city/country text when needed.
+    // Do not merge heuristic field values into a successful Gemini parse.
     const originResolved =
       (typeof obj.originIata === 'string'
         ? resolvePlaceQuery(obj.originIata)
@@ -302,28 +365,63 @@ export class AiService {
         : null) ??
       (destinationCity ? resolvePlaceQuery(destinationCity) : null);
 
-    const departureDate = asIsoDate(obj.departureDate) ?? fallback.departureDate;
-    const returnDate = applyStayNights(
-      departureDate,
-      asIsoDate(obj.returnDate) ?? fallback.returnDate,
-      extractStayNights(originalPrompt),
-    );
+    const stayNights = extractStayNights(originalPrompt);
+    // Prefer LLM fields; backfill null dates/city/nights from heuristic when the
+    // prompt clearly had them (LLMs often omit stay windows in hotels mode).
+    let departureDate =
+      asIsoDate(obj.departureDate) ?? fallback.departureDate ?? null;
+    let geminiReturn = asIsoDate(obj.returnDate);
+    let returnDate =
+      applyStayNights(departureDate, geminiReturn, stayNights) ??
+      fallback.returnDate ??
+      null;
+    if (!departureDate && fallback.departureDate) {
+      departureDate = fallback.departureDate;
+    }
+    if (!returnDate && fallback.returnDate) {
+      returnDate = fallback.returnDate;
+    }
+
     const adults =
       typeof obj.adults === 'number' &&
       Number.isFinite(obj.adults) &&
       obj.adults >= 1 &&
       obj.adults <= 9
         ? Math.round(obj.adults)
-        : fallback.adults;
+        : (fallback.adults ?? null);
 
     const tripTypeRaw =
       typeof obj.tripType === 'string' ? obj.tripType.trim().toLowerCase() : null;
-    const tripType =
+    let tripType: 'one_way' | 'round_trip' | null =
       tripTypeRaw === 'one_way' || tripTypeRaw === 'one-way'
-        ? ('one_way' as const)
+        ? 'one_way'
         : tripTypeRaw === 'round_trip' || tripTypeRaw === 'round-trip'
-          ? ('round_trip' as const)
-          : fallback.tripType;
+          ? 'round_trip'
+          : null;
+    // Only infer trip type from dates that Gemini itself returned (stated in prompt).
+    if (!tripType) {
+      if ((geminiReturn || returnDate) && departureDate) tripType = 'round_trip';
+      else if (departureDate || stayNights != null) tripType = 'one_way';
+      else tripType = fallback.tripType;
+    }
+    if (bookingMode === 'HOTELS' && returnDate && departureDate) {
+      tripType = 'round_trip';
+    }
+
+    const geminiNights =
+      typeof obj.hotelNights === 'number' && Number.isFinite(obj.hotelNights)
+        ? clampHotelNights(obj.hotelNights)
+        : null;
+    const hotelNights =
+      deriveHotelNights({
+        tripType,
+        departureDate,
+        returnDate,
+        hotelNights: geminiNights,
+        stayNights,
+      }) ??
+      fallback.hotelNights ??
+      null;
 
     const notes = Array.isArray(obj.notes)
       ? obj.notes.filter((n): n is string => typeof n === 'string')
@@ -332,34 +430,66 @@ export class AiService {
     if (destinationResolved?.mappedFrom) {
       notes.push(destinationResolved.mappedFrom);
     }
-    if (notes.length === 0) notes.push(...fallback.notes);
 
     const modelQuestion =
       typeof obj.clarifyingQuestion === 'string'
         ? obj.clarifyingQuestion.trim()
         : null;
 
-    const result = finalizeTravelIntent({
-      originIata: originResolved?.iata ?? fallback.originIata,
-      destinationIata: destinationResolved?.iata ?? fallback.destinationIata,
-      originCity: originResolved?.city ?? originCity ?? fallback.originCity,
-      destinationCity:
-        destinationResolved?.city ??
-        destinationCity ??
-        fallback.destinationCity,
-      departureDate,
-      returnDate,
-      tripType,
-      adults,
-      source: 'gemini',
-      notes,
-      clarifyingQuestion: modelQuestion,
-    });
+    const destinationIata =
+      destinationResolved?.iata ?? fallback.destinationIata ?? null;
+    const destinationCityResolved =
+      destinationResolved?.city ??
+      destinationCity ??
+      fallback.destinationCity ??
+      null;
 
-    if (!result.originIata && !result.destinationIata && !result.departureDate) {
+    const result = finalizeTravelIntent(
+      {
+        isTravelRequest: true,
+        originIata:
+          bookingMode === 'HOTELS'
+            ? null
+            : (originResolved?.iata ?? null),
+        destinationIata,
+        originCity:
+          bookingMode === 'HOTELS'
+            ? null
+            : (originResolved?.city ?? originCity),
+        destinationCity: destinationCityResolved,
+        departureDate,
+        returnDate,
+        tripType,
+        hotelNights,
+        adults,
+        source: this.llmSource(),
+        notes,
+        clarifyingQuestion: modelQuestion,
+      },
+      bookingMode,
+    );
+
+    // Empty / unusable LLM output → heuristic backup only.
+    const hasHotelSignal =
+      Boolean(result.destinationIata) ||
+      Boolean(result.destinationCity?.trim()) ||
+      Boolean(result.departureDate) ||
+      Boolean(result.hotelNights);
+    if (
+      bookingMode === 'HOTELS'
+        ? !hasHotelSignal
+        : !result.originIata &&
+          !result.destinationIata &&
+          !result.departureDate &&
+          !result.tripType
+    ) {
       return fallback;
     }
     return result;
+  }
+
+  private llmSource(): 'gemini' | 'groq' {
+    return this.aiProvider.name === 'groq' ? 'groq' : 'gemini';
   }
 
   private resolveFlights(

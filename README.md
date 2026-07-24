@@ -41,7 +41,7 @@ Built as a Bachelor's Thesis with a production-style monorepo (Next.js + NestJS 
 | Backend | NestJS, Prisma, REST, JWT, Swagger (`/docs`) |
 | Database | PostgreSQL |
 | Search | SerpAPI (Google Flights / Google Hotels) |
-| AI | Google Gemini (`gemini-2.0-flash`) |
+| AI | Groq (default) or Google Gemini |
 | Runtime | Docker + Docker Compose |
 
 ---
@@ -78,7 +78,8 @@ cd seesight
 git checkout development
 
 cp server/.env.example server/.env
-# Set at least: DATABASE_URL, JWT secrets, SERPAPI_API_KEY, GEMINI_API_KEY
+# Set at least: DATABASE_URL, JWT secrets, SERPAPI_API_KEY, GROQ_API_KEY
+# AI_PROVIDER=groq
 
 docker compose -f docker/docker-compose.yml up --build
 ```
@@ -101,7 +102,8 @@ Seed accounts and ERD: [`docs/DATABASE.md`](docs/DATABASE.md).
 - `DATABASE_URL` — Postgres connection string  
 - `JWT_*` / auth secrets — see `.env.example`  
 - `SERPAPI_API_KEY` — flights & hotels  
-- `GEMINI_API_KEY` + `AI_PROVIDER=gemini` — AI parse & recommendations  
+- `GROQ_API_KEY` + `AI_PROVIDER=groq` — AI parse & recommendations (free tier)  
+- `GEMINI_API_KEY` + `AI_PROVIDER=gemini` — optional alternate provider
 - `CORS_ORIGIN` / `WEB_ORIGIN` — frontend origin(s), comma-separated if needed (no trailing slash)
 - Empty `CORS_ORIGIN` is ignored; `WEB_ORIGIN` is always merged into the allow-list
 
@@ -142,8 +144,8 @@ Required variables (api):
 | `CORS_ORIGIN` | Exact web origin, e.g. `https://test.seesight.net` |
 | `WEB_ORIGIN` | Same as web origin (used for CORS + app links) |
 | `SERPAPI_API_KEY` | Flights / hotels |
-| `GEMINI_API_KEY` | AI parse & recommendations |
-| `AI_PROVIDER` | `gemini` |
+| `GROQ_API_KEY` | AI parse & recommendations (free tier) |
+| `AI_PROVIDER` | `groq` (or `gemini`) |
 | `NODE_ENV` | `production` |
 
 ### Web (client)

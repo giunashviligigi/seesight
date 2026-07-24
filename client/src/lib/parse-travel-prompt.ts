@@ -8,22 +8,67 @@ export type ParsedTravelPrompt = {
   departureDate: string | null;
   returnDate: string | null;
   tripType: "one_way" | "round_trip" | null;
+  hotelNights: number | null;
   adults: number | null;
   notes: string[];
   clarifyingQuestion: string | null;
 };
+
+function clampHotelNights(value: number): number {
+  return Math.min(30, Math.max(1, Math.round(value)));
+}
+
+function nightsBetweenIso(startIso: string, endIso: string): number | null {
+  const start = Date.parse(`${startIso}T00:00:00.000Z`);
+  const end = Date.parse(`${endIso}T00:00:00.000Z`);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  const nights = Math.round((end - start) / 86_400_000);
+  if (nights < 1) return null;
+  return clampHotelNights(nights);
+}
+
+function extractStayNights(text: string): number | null {
+  const match = text.match(
+    /\b(?:for\s+)?(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s*nights?\b/i,
+  );
+  if (!match) return null;
+  const words: Record<string, number> = {
+    one: 1,
+    two: 2,
+    three: 3,
+    four: 4,
+    five: 5,
+    six: 6,
+    seven: 7,
+    eight: 8,
+    nine: 9,
+    ten: 10,
+  };
+  const raw = match[1].toLowerCase();
+  const n = words[raw] ?? Number(raw);
+  return Number.isFinite(n) && n >= 1 && n <= 30 ? clampHotelNights(n) : null;
+}
 
 function buildClarifyingQuestion(intent: {
   originIata: string | null;
   destinationIata: string | null;
   destinationCity: string | null;
   departureDate: string | null;
+  returnDate: string | null;
+  tripType: "one_way" | "round_trip" | null;
+  hotelNights: number | null;
 }): string | null {
   const ready =
     intent.originIata &&
     intent.destinationIata &&
     intent.departureDate &&
-    intent.originIata !== intent.destinationIata;
+    intent.originIata !== intent.destinationIata &&
+    intent.tripType &&
+    (intent.tripType === "round_trip"
+      ? Boolean(intent.returnDate && intent.returnDate >= intent.departureDate)
+      : intent.hotelNights != null &&
+        intent.hotelNights >= 1 &&
+        intent.hotelNights <= 30);
   if (ready) {
     return null;
   }
@@ -36,8 +81,25 @@ function buildClarifyingQuestion(intent: {
   if (!intent.originIata || intent.originIata === intent.destinationIata) {
     return "Where are you departing from?";
   }
+  if (!intent.tripType) {
+    return "Is this one-way or round-trip?";
+  }
   if (!intent.departureDate) {
     return "What departure date should we use? (for example 25 January)";
+  }
+  if (
+    intent.tripType === "round_trip" &&
+    (!intent.returnDate || intent.returnDate < intent.departureDate)
+  ) {
+    return "What return date should we use? (for example 30 January)";
+  }
+  if (
+    intent.tripType === "one_way" &&
+    (intent.hotelNights == null ||
+      intent.hotelNights < 1 ||
+      intent.hotelNights > 30)
+  ) {
+    return "How many hotel nights (1–30)?";
   }
   return "Could you add a bit more detail so we can search flights and hotels?";
 }
@@ -386,12 +448,16 @@ function stripDatePhrases(text: string): string {
 function extractTripType(
   text: string,
   hasReturnDate: boolean,
-): "one_way" | "round_trip" {
+  hasDepartureDate: boolean,
+  hasStayNights: boolean,
+): "one_way" | "round_trip" | null {
   if (/\b(one[\s-]?way|ow)\b/i.test(text)) return "one_way";
   if (/\b(round[\s-]?trip|return(?:\s+trip)?|two[\s-]?way)\b/i.test(text)) {
     return "round_trip";
   }
-  return hasReturnDate ? "round_trip" : "one_way";
+  if (hasReturnDate) return "round_trip";
+  if (hasDepartureDate || hasStayNights) return "one_way";
+  return null;
 }
 
 function resolveNamedPlace(raw: string): Airport | null {
@@ -505,6 +571,7 @@ export function parseTravelPrompt(
       departureDate: null,
       returnDate: null,
       tripType: null,
+      hotelNights: null,
       adults: null,
       notes: ["empty prompt"],
       clarifyingQuestion: "Could you describe your trip in a bit more detail?",
@@ -513,8 +580,24 @@ export function parseTravelPrompt(
 
   const dates = extractDates(text, referenceDate);
   const route = extractRoute(text);
-  const tripType = extractTripType(text, Boolean(dates.returnDate));
+  const stayNights = extractStayNights(text);
+  const tripType = extractTripType(
+    text,
+    Boolean(dates.returnDate),
+    Boolean(dates.departureDate),
+    stayNights != null,
+  );
   const adults = extractAdults(text);
+  let hotelNights: number | null =
+    tripType === "round_trip" ? null : stayNights;
+  if (
+    hotelNights == null &&
+    tripType === "one_way" &&
+    dates.departureDate &&
+    dates.returnDate
+  ) {
+    hotelNights = nightsBetweenIso(dates.departureDate, dates.returnDate);
+  }
 
   if (!dates.departureDate) notes.push("could not detect departure date");
   if (!dates.returnDate && tripType === "round_trip") {
@@ -531,6 +614,7 @@ export function parseTravelPrompt(
     departureDate: dates.departureDate,
     returnDate: dates.returnDate,
     tripType,
+    hotelNights,
     adults,
     notes,
   };

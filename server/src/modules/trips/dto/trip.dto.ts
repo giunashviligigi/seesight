@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { TripStatus } from '@prisma/client';
+import { BookingMode, TripStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
@@ -38,6 +38,15 @@ export class CreateTripDto {
   @MinLength(1)
   @MaxLength(200)
   purpose!: string;
+
+  @ApiPropertyOptional({
+    enum: BookingMode,
+    default: BookingMode.BOTH,
+    description: 'Search/submit scope: flights only, hotels only, or both',
+  })
+  @IsOptional()
+  @IsEnum(BookingMode)
+  bookingMode?: BookingMode;
 
   @ApiPropertyOptional({
     example: 'Germany',
@@ -113,6 +122,14 @@ export class UpdateTripDto {
   @MinLength(1)
   @MaxLength(200)
   purpose?: string;
+
+  @ApiPropertyOptional({
+    enum: BookingMode,
+    description: 'Search/submit scope: flights only, hotels only, or both',
+  })
+  @IsOptional()
+  @IsEnum(BookingMode)
+  bookingMode?: BookingMode;
 
   @ApiPropertyOptional({
     nullable: true,

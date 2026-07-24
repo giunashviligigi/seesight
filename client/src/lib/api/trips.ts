@@ -1,6 +1,8 @@
 import { API_BASE_URL, ApiError, apiRequest } from "./client";
 import { getStoredAccessToken } from "./auth";
 
+export type BookingMode = "FLIGHTS" | "HOTELS" | "BOTH";
+
 export type TripStatus =
   | "DRAFT"
   | "PENDING_APPROVAL"
@@ -33,6 +35,7 @@ export type Trip = {
   budgetAmount: number | null;
   budgetCurrency: string;
   notes: string | null;
+  bookingMode: BookingMode;
   status: TripStatus;
   travelers: TripTraveler[];
   approval: {
@@ -82,6 +85,7 @@ export type TripTravelerInput = {
 
 export type CreateTripInput = {
   purpose: string;
+  bookingMode?: BookingMode;
   destinationCountry?: string;
   destinationCity?: string;
   startDate?: string;
@@ -95,6 +99,7 @@ export type CreateTripInput = {
 
 export type UpdateTripInput = {
   purpose?: string;
+  bookingMode?: BookingMode;
   destinationCountry?: string | null;
   destinationCity?: string | null;
   startDate?: string;

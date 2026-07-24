@@ -48,6 +48,9 @@ SERPAPI_RATE_LIMIT_PER_MINUTE=30
 ## Frontend
 
 - `TripSearchWidget` on `/trips/[id]` (empty + filled tile states)
+- Free-text “describe your trip” → Gemini-first parse → clarifying Q&A (all SerpAPI fields) → soft-fill → SerpAPI search
+- Non-travel text starts destination Q&A; search never runs on invented fields
+- Rebuild Docker after pulling these changes: `docker compose -f docker/docker-compose.yml up --build -d`
 - One-way: **hotel nights** control (1–30); checkout = depart + nights; trip `endDate` syncs to checkout
 - Round-trip: hotel stay follows return date
 - Selected offers shown on trip detail and survive reload via snapshots

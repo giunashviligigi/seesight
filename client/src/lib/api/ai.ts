@@ -23,7 +23,7 @@ export type RecommendItineraryResponse = {
   id: string;
   tripId: string;
   provider: string;
-  source: "gemini" | "rule_based";
+  source: "gemini" | "groq" | "rule_based";
   promptSummary: string | null;
   recommendation: RecommendationResult;
   createdAt: string;
@@ -37,7 +37,16 @@ function authToken(token?: string | null) {
   return token ?? getStoredAccessToken();
 }
 
+export type ClarificationFocus =
+  | "origin"
+  | "destination"
+  | "departureDate"
+  | "returnDate"
+  | "tripType"
+  | "hotelNights";
+
 export type ParseTravelIntentResponse = {
+  isTravelRequest: boolean;
   originIata: string | null;
   destinationIata: string | null;
   originCity: string | null;
@@ -45,10 +54,12 @@ export type ParseTravelIntentResponse = {
   departureDate: string | null;
   returnDate: string | null;
   tripType?: "one_way" | "round_trip" | null;
+  hotelNights?: number | null;
   adults: number | null;
-  source: "gemini" | "heuristic";
+  source: "gemini" | "groq" | "heuristic";
   notes: string[];
   clarifyingQuestion?: string | null;
+  clarificationFocus?: ClarificationFocus | null;
 };
 
 export const aiApi = {
@@ -93,7 +104,19 @@ export const aiApi = {
       prompt: string;
       referenceDate?: string;
       clarificationAnswer?: string;
-      clarificationFocus?: "origin" | "destination" | "departureDate";
+      clarificationFocus?: ClarificationFocus;
+      bookingMode?: "FLIGHTS" | "HOTELS" | "BOTH";
+      draft?: {
+        originIata?: string | null;
+        destinationIata?: string | null;
+        originCity?: string | null;
+        destinationCity?: string | null;
+        departureDate?: string | null;
+        returnDate?: string | null;
+        tripType?: "one_way" | "round_trip" | null;
+        hotelNights?: number | null;
+        adults?: number | null;
+      };
     },
     accessToken?: string | null,
   ) {
